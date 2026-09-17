@@ -1,34 +1,47 @@
 import { addSVGElement, editSVGElement, HTML_URL, calcPerpendicularTranslation, getSVGCoords, transformCoords } from './svg_utils/index.js';
 import { Rectangle } from "./rectangle/index.js"
-import { Warper } from "./map_warper.js"
+import { Warper } from "./trapezium_warp.js"
 import { PanZoomListener } from "./panzoom_listener.js";
 
 class TransitMapBackground {
 	constructor(containerElement, imageBitmap) {
 		this.containerElement = containerElement;
-		this.canvasWrapper = addSVGElement(this.containerElement, "foreignObject", {
-			x: 0, y: 0,
-			width: imageBitmap.width, 
+		this.bbox = {
+			x: 0,
+			y: 0,
+			width: imageBitmap.width,
 			height: imageBitmap.height
-		});
+		};
+		this.origin = {x: 0, y: 0}
+		
+		this.canvasWrapper = addSVGElement(this.containerElement, "foreignObject", this.bbox);
 	
 		this.canvas = document.createElement("canvas");
 		this.canvas.setAttribute("xmlns", HTML_URL);
-		this.canvas.width = imageBitmap.width;
-		this.canvas.height = imageBitmap.height;
+		this.canvas.width = this.bbox.width;
+		this.canvas.height = this.bbox.height;
 		this.ctx = this.canvas.getContext("2d", {willReadFrequently: true});
 		this.ctx.drawImage(imageBitmap, 0, 0);
 		this.canvasWrapper.appendChild(this.canvas);
 	}
 	
-	getImageData(bbox) {
-		const {x, y, width, height} = bbox;
-		return this.ctx.getImageData(x, y, width, height);
-	}
-	
-	async getImageBitmap(bbox) {
-		const {x, y, width, height} = bbox;
-		return await createImageBitmap(this.canvas, x, y, width, height);
+	changeBbox(deltaBbox) {
+		const tempImageData = this.ctx.getImageData(0, 0, this.bbox.width, this.bbox.height);
+		
+		const newBbox = {
+			x: this.bbox.x + deltaBbox.dx,
+			y: this.bbox.y + deltaBbox.dy,
+			width: deltaBbox.width,
+			height: deltaBbox.height
+		};
+		editSVGElement(this.canvasWrapper, newBbox);
+		this.canvas.width = newBbox.width;
+		this.canvas.height = newBbox.height;
+		this.origin.x -= deltaBbox.dx;
+		this.origin.y -= deltaBbox.dy;
+		this.ctx.putImageData(tempImageData, -deltaBbox.dx, -deltaBbox.dy);
+		
+		this.bbox = newBbox;
 	}
 	
 	panzoom(matrix) {
@@ -278,11 +291,10 @@ class TransitMapDrawer {
 
 class TransitMapWarper {
 	
-	constructor(map) {
-		this.map = map;
-		this.drawer = map.drawer;
-		this.background = map.background;
-		this.drawer.containerElement.addEventListener("pointerdown", this.handleClick.bind(this));
+	constructor(drawer, background, svgElement, stops) {
+		Object.assign(this, { drawer, background, svgElement, stops });
+
+		this.svgElement.addEventListener("pointerdown", this.handleClick.bind(this));
 		this.affectedArea = null;
 		this.movableArea = null;
 		
@@ -292,7 +304,7 @@ class TransitMapWarper {
 			fill: "black"
 		})
 		
-		this.pz = new PanZoomListener(this.drawer.containerElement, this.panzoom.bind(this));
+		this.pz = new PanZoomListener(this.svgElement, this.panzoom.bind(this));
 	}
 	
 	panzoom(matrix) {
@@ -321,9 +333,7 @@ class TransitMapWarper {
 	
 	async handleClick(event) {
 		let {x, y} = this.screenToMapCoords(event.x, event.y);
-		console.log(x, y);
 
-		
 		if (this.affectedArea && this.affectedArea.contains(x, y)) {
 			this.removeMovableArea();
 			await this.selectMovableArea(x, y)
@@ -380,7 +390,7 @@ class TransitMapWarper {
 	
 	#collectStopsInAffectedArea() {
 		this.affectedStops = [];
-		for (let stop of this.map.stops) {
+		for (let stop of this.stops) {
 			if (this.affectedArea.contains(stop.x, stop.y)) {
 				// NEEDS to put them here as we need the ORIGINAL x and y
 				this.affectedStops.push({origX: stop.x, origY: stop.y, stop});
@@ -393,14 +403,14 @@ class TransitMapWarper {
 	// WARPING - happens in NON-PANZOOMED SPACE
 	
 	async initWarp() {
-		this.#collectStopsInAffectedArea();		
+		this.#collectStopsInAffectedArea();
 
 		this.warper = new Warper(
 			this.affectedArea.bbox,
 			this.movableArea.bbox,
-			this.background.getImageData(this.affectedArea.bbox),
-			await this.background.getImageBitmap(this.movableArea.bbox),
-			this.background.ctx
+			this.background.ctx,
+			this.background.changeBbox.bind(this.background),
+			this.background.origin
 		)
 	}
 	

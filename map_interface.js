@@ -93,7 +93,7 @@ class TransitMap {
 		this.background = new TransitMapBackground(this.containerElement, image)
 		
 		this.drawer = new TransitMapDrawer(this, this.containerElement, drawOptions);
-		this.warper = new TransitMapWarper(this);
+		this.warper = new TransitMapWarper(this.drawer, this.background, this.svgElement, this.stops);
 
 		this.drawer.draw();
 	}

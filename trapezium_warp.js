@@ -1,3 +1,5 @@
+import { addXY } from "./svg_utils/index.js";
+
 class Frame {
 	constructor(width, height, box) {
 		this.x0 = box.x;
@@ -271,7 +273,13 @@ class WarpingCoordinateMap {
 				newImageData.data.set(colour, (yi*this.width + xi)*4);
 			}
 		}
+		
 		ctx.putImageData(newImageData, ox, oy);
+		ctx.clearRect(
+			toBox.x + ox, toBox.y + oy,
+			toBox.width, toBox.height
+		);
+		
 		ctx.drawImage(
 			centralImage,
 			toBox.x + ox, toBox.y + oy,
@@ -281,40 +289,72 @@ class WarpingCoordinateMap {
 }
 
 class Warper {
-	constructor(outerBox, fromBox, imgData, centralImage, ctx) {
-		this.ox = outerBox.x;
-		this.oy = outerBox.y;
+	constructor(outerBox, fromBox, ctx, changeCanvasBbox = null, canvasOrigin = {x: 0, y: 0}) {
+		
+		this.staticOx = outerBox.x;
+		this.staticOy = outerBox.y;
+		
+		console.log(outerBox, fromBox);
+		this.origin = {x: canvasOrigin.x, y: canvasOrigin.y};
+		outerBox = addXY(outerBox, this.origin);
+		fromBox = addXY(fromBox, this.origin);
+		console.log(outerBox, fromBox);
+		
+		this.origImageData = ctx.getImageData(outerBox.x, outerBox.y, outerBox.width, outerBox.height);
+		createImageBitmap(ctx.canvas, fromBox.x, fromBox.y, fromBox.width, fromBox.height).then(
+			((bitmap) => this.centralImage = bitmap).bind(this)
+		)
+				
+		this.initOx = outerBox.x;
+		this.initOy = outerBox.y;
 		this.width = outerBox.width;
 		this.height = outerBox.height;
+
+		if (changeCanvasBbox) {
+			const deltaBbox = {
+				dx: Math.min(0, this.initOx),
+				dy: Math.min(0, this.initOy),
+				width: Math.max(this.initOx + this.width, ctx.canvas.width),
+				height: Math.max(this.initOy + this.height, ctx.canvas.height)
+			};
+			this.drawOx = Math.max(0, this.initOx);
+			this.drawOy = Math.max(0, this.initOy);
+
+			changeCanvasBbox(deltaBbox);
+			
+		} else {
+			this.drawOx = this.initOx;
+			this.drawOy = this.initOy;
+		}
+		
+				
 		this.coordinateMap = new WarpingCoordinateMap(
 			this.width, this.height, this.correctBox(fromBox)
 		);
-		if (imgData.width != this.width || imgData.height != this.height) {
-			console.log(imgData.width, imgData.height, this.width, this.height);
-			throw "Bad dimensions";
-		}
-		this.origImageData = imgData;
-		this.centralImage = centralImage;
-		this.newImageData = ctx.createImageData(imgData);
+		
+		this.newImageData = ctx.createImageData(this.origImageData);
 		this.ctx = ctx;
 	}
+	
 	correctBox(box) {
 		const {x, y, width, height} = box;
 		return {
-			x: x - this.ox,
-			y: y - this.oy,
+			x: x - this.initOx,
+			y: y - this.initOy,
 			width, height
 		}
 	}
+	
 	setDestBox(destBox) {
 		this.destBox = this.correctBox(destBox);
 	}
+	
 	warpPoint({x, y}) {
 		const {newX, newY} = this.coordinateMap.warpPoint(
-			{x: x - this.ox, y: y - this.oy},
+			{x: x - this.initOx, y: y - this.initOy},
 			this.destBox
 		);
-		return {newX: newX + this.ox, newY: newY + this.oy};
+		return {newX: newX + this.initOx, newY: newY + this.initOx};
 	}
 	warpOnCanvas() {
 		this.coordinateMap.warpImageOnCanvas(
@@ -322,9 +362,9 @@ class Warper {
 			this.newImageData,
 			this.centralImage,
 			this.ctx,
-			this.destBox,
-			this.ox,
-			this.oy
+			addXY(this.destBox, this.origin),
+			this.drawOx,
+			this.drawOy
 		)
 	}
 }
