@@ -42,6 +42,7 @@ class TransitMapBackground {
 		this.ctx.putImageData(tempImageData, -deltaBbox.dx, -deltaBbox.dy);
 		
 		this.bbox = newBbox;
+		return {...this.origin};
 	}
 	
 	panzoom(matrix) {

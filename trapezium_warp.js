@@ -290,43 +290,35 @@ class WarpingCoordinateMap {
 
 class Warper {
 	constructor(outerBox, fromBox, ctx, changeCanvasBbox = null, canvasOrigin = {x: 0, y: 0}) {
+		this.canvasOrigin = {...canvasOrigin};
 		
-		this.staticOx = outerBox.x;
-		this.staticOy = outerBox.y;
-		
-		console.log(outerBox, fromBox);
-		this.origin = {x: canvasOrigin.x, y: canvasOrigin.y};
-		outerBox = addXY(outerBox, this.origin);
-		fromBox = addXY(fromBox, this.origin);
-		console.log(outerBox, fromBox);
-		
-		this.origImageData = ctx.getImageData(outerBox.x, outerBox.y, outerBox.width, outerBox.height);
-		createImageBitmap(ctx.canvas, fromBox.x, fromBox.y, fromBox.width, fromBox.height).then(
-			((bitmap) => this.centralImage = bitmap).bind(this)
-		)
-				
-		this.initOx = outerBox.x;
-		this.initOy = outerBox.y;
+		this.ox = outerBox.x;
+		this.oy = outerBox.y;
 		this.width = outerBox.width;
 		this.height = outerBox.height;
-
+		
+		const realCanvasOx = this.ox + this.canvasOrigin.x;
+		const realCanvasOy = this.oy + this.canvasOrigin.y;
+		
+		this.origImageData = ctx.getImageData(realCanvasOx, realCanvasOy, outerBox.width, outerBox.height);
+		createImageBitmap(
+			ctx.canvas,
+			fromBox.x + this.canvasOrigin.x, fromBox.y + this.canvasOrigin.y,
+			fromBox.width, fromBox.height
+		).then(
+			((bitmap) => this.centralImage = bitmap).bind(this)
+		)
+		
+		var newCanvasOrigin = {};		
 		if (changeCanvasBbox) {
 			const deltaBbox = {
-				dx: Math.min(0, this.initOx),
-				dy: Math.min(0, this.initOy),
-				width: Math.max(this.initOx + this.width, ctx.canvas.width),
-				height: Math.max(this.initOy + this.height, ctx.canvas.height)
+				dx: Math.min(0, realCanvasOx),
+				dy: Math.min(0, realCanvasOy),
+				width: Math.max(realCanvasOx + this.width, ctx.canvas.width),
+				height: Math.max(realCanvasOy + this.height, ctx.canvas.height)
 			};
-			this.drawOx = Math.max(0, this.initOx);
-			this.drawOy = Math.max(0, this.initOy);
-
-			changeCanvasBbox(deltaBbox);
-			
-		} else {
-			this.drawOx = this.initOx;
-			this.drawOy = this.initOy;
-		}
-		
+			this.canvasOrigin = changeCanvasBbox(deltaBbox);
+		}		
 				
 		this.coordinateMap = new WarpingCoordinateMap(
 			this.width, this.height, this.correctBox(fromBox)
@@ -339,8 +331,8 @@ class Warper {
 	correctBox(box) {
 		const {x, y, width, height} = box;
 		return {
-			x: x - this.initOx,
-			y: y - this.initOy,
+			x: x - this.ox,
+			y: y - this.oy,
 			width, height
 		}
 	}
@@ -351,10 +343,10 @@ class Warper {
 	
 	warpPoint({x, y}) {
 		const {newX, newY} = this.coordinateMap.warpPoint(
-			{x: x - this.initOx, y: y - this.initOy},
+			{x: x - this.ox, y: y - this.oy},
 			this.destBox
 		);
-		return {newX: newX + this.initOx, newY: newY + this.initOx};
+		return {newX: newX + this.ox, newY: newY + this.oy};
 	}
 	warpOnCanvas() {
 		this.coordinateMap.warpImageOnCanvas(
@@ -362,9 +354,9 @@ class Warper {
 			this.newImageData,
 			this.centralImage,
 			this.ctx,
-			addXY(this.destBox, this.origin),
-			this.drawOx,
-			this.drawOy
+			this.destBox,
+			this.ox + this.canvasOrigin.x,
+			this.oy + this.canvasOrigin.y
 		)
 	}
 }
