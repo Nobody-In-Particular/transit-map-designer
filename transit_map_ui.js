@@ -1,6 +1,6 @@
 import { addSVGElement, editSVGElement, HTML_URL, calcPerpendicularTranslation, getSVGCoords, transformCoords } from './svg_utils/index.js';
 import { Rectangle } from "./rectangle/index.js"
-import { Warper } from "./trapezium_warp.js"
+import { TrapeziumWarper } from "./trapezium_warp.js"
 import { PanZoomListener } from "./panzoom_listener.js";
 
 class TransitMapBackground {
@@ -290,7 +290,7 @@ class TransitMapDrawer {
 
 
 
-class TransitMapWarper {
+class TransitMapBase {
 	
 	constructor(drawer, background, svgElement, stops) {
 		Object.assign(this, { drawer, background, svgElement, stops });
@@ -406,7 +406,7 @@ class TransitMapWarper {
 	async initWarp() {
 		this.#collectStopsInAffectedArea();
 
-		this.warper = new Warper(
+		this.warper = new TrapeziumWarper(
 			this.affectedArea.bbox,
 			this.movableArea.bbox,
 			this.background.ctx,
@@ -429,4 +429,4 @@ class TransitMapWarper {
 	}
 }
 
-export { TransitMapBackground, TransitMapDrawer, TransitMapWarper }
+export { TransitMapBackground, TransitMapDrawer, TransitMapBase }

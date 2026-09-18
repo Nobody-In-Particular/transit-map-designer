@@ -1,5 +1,5 @@
 import { addSVGElement, randomColour } from "./svg_utils/index.js";
-import { TransitMapBackground, TransitMapDrawer, TransitMapWarper } from "./transit_map_ui.js";
+import { TransitMapBackground, TransitMapDrawer, TransitMapBase } from "./transit_map_ui.js";
 
 
 class TransitMap {
@@ -93,7 +93,7 @@ class TransitMap {
 		this.background = new TransitMapBackground(this.containerElement, image)
 		
 		this.drawer = new TransitMapDrawer(this, this.containerElement, drawOptions);
-		this.warper = new TransitMapWarper(this.drawer, this.background, this.svgElement, this.stops);
+		this.warper = new TransitMapBase(this.drawer, this.background, this.svgElement, this.stops);
 
 		this.drawer.draw();
 	}

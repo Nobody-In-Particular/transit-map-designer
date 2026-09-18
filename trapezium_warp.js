@@ -288,7 +288,7 @@ class WarpingCoordinateMap {
 	}
 }
 
-class Warper {
+class TrapeziumWarper {
 	constructor(outerBox, fromBox, ctx, changeCanvasBbox = null, canvasOrigin = {x: 0, y: 0}) {
 		this.canvasOrigin = {...canvasOrigin};
 		
@@ -362,4 +362,4 @@ class Warper {
 	}
 }
 
-export { Warper };
+export { TrapeziumWarper };
