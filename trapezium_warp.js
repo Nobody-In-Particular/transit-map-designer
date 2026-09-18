@@ -314,9 +314,10 @@ class Warper {
 			const deltaBbox = {
 				dx: Math.min(0, realCanvasOx),
 				dy: Math.min(0, realCanvasOy),
-				width: Math.max(realCanvasOx + this.width, ctx.canvas.width),
-				height: Math.max(realCanvasOy + this.height, ctx.canvas.height)
 			};
+			deltaBbox.width = Math.max(this.width + realCanvasOx, ctx.canvas.width) - deltaBbox.dx,
+			deltaBbox.height = Math.max(this.height + realCanvasOy, ctx.canvas.height) - deltaBbox.dy;
+			
 			this.canvasOrigin = changeCanvasBbox(deltaBbox);
 		}		
 				
