@@ -3,6 +3,14 @@ import { Rectangle } from "./rectangle/index.js"
 import { TrapeziumWarper } from "./trapezium_warp.js"
 import { PanZoomListener } from "./panzoom_listener.js";
 
+function getOrReturnObj(val, arr) {
+	if (typeof val == "number" || !isNaN(parseInt(val))) {
+		return arr[val]
+	} else {
+		return val;
+	}
+}
+
 class TransitMapBackground {
 	constructor(containerElement, imageBitmap) {
 		this.containerElement = containerElement;
@@ -55,13 +63,17 @@ class TransitMapBackground {
 
 
 class TransitMapDrawer {
-	constructor(map, containerElement, options) {
+	constructor(
+		map, containerElement,
+		{lineWidth = 3, stopMargin = 2, stopRadius = 2, stopOutlineWidth = 1, labelFont = "Arial", labelSize = "12",
+		minStopWidth = 4, minStopHeight = 4}
+	){
 		this.map = map;
 		this.containerElement = containerElement;
-		this.options = options;
+		this.options = {lineWidth, stopMargin, stopRadius, stopOutlineWidth, labelFont, labelSize, minStopWidth, minStopHeight};
 		
 		for (let lineSection of this.map.lineSections) {
-			this.createLineSegments(lineSection);
+			this.createLineParts(lineSection);
 		}
 		for (let stop of this.map.stops) {
 			this.createStop(stop);
@@ -95,15 +107,22 @@ class TransitMapDrawer {
 		
 		for (let service of this.map.services) {
 			const label = addSVGElement(this.containerElement, "text", {visibility: "hidden", "class": "-label"});
-			label.textContent = service.id;
+			label.textContent = service.name;
 			service.label = label;
 		}
 	}
 	
+	#getStop(stop) {
+		return getOrReturnObj(stop, this.map.stops);
+	}
 	
+	#getService(service) {
+		return getOrReturnObj(service, this.map.services);
+	}
 	
 	
 	showStopLabel(stop) {
+		stop = this.#getStop(stop);
 		editSVGElement(stop.label, {
 			x: stop.x + stop.width / 2 + 4,
 			y: stop.y,
@@ -115,6 +134,7 @@ class TransitMapDrawer {
 	
 	
 	hideStopLabel(stop) {
+		stop = this.#getStop(stop);
 		editSVGElement(stop.label, {
 			visibility: "hidden"
 		})
@@ -124,55 +144,62 @@ class TransitMapDrawer {
 	
 	
 	highlightService(service, x, y) {
+		({x, y} = this.#coordTransform(x, y));
+		service = this.#getService(service);
 		editSVGElement(service.label, {
 			x: x + 4,
 			y: y,
 			visibility: "visible"
-		})
+		});
 		for (let otherService of this.map.services) {
-			let {id, lineSegments} = otherService;
+			let {id, lineParts, stops} = otherService;
 			if (otherService != service) {
-				for (let seg of lineSegments) {
-					editSVGElement(seg, {visibility: "hidden"})
+				for (let part of lineParts) {
+					editSVGElement(part, {visibility: "hidden"})
 				}
 			}
 		}
-	}
-	
-	
-	
-	
-	
-	unhighlightService(service) {
-		for (let {lineSegments} of this.map.services) {
-			for (let seg of lineSegments) {
-				editSVGElement(seg, {visibility: "visible"})
+		const thisStopNames = new Set(service.stops.map((s) => s.id));
+		for (let stop of this.map.stops) {
+			if (!thisStopNames.has(stop.id)) {
+				editSVGElement(stop.el, {visibility: "hidden"});
 			}
+		}
+	}
+
+	unhighlightService(service) {
+		service = this.#getService(service);
+		for (let {lineParts} of this.map.services) {
+			for (let part of lineParts) {
+				editSVGElement(part, {visibility: "visible"})
+			}
+		}
+		for (let stop of this.map.stops) {
+			editSVGElement(stop.el, {visibility: "visible"});
 		}
 		editSVGElement(service.label, {visibility: "hidden"});
 	}
 
-	
-	
-	
-	
+
 	createStop(stop) {
-		stop.width = 4;
-		stop.height = 4;
+		stop.width = this.options.minStopWidth;
+		stop.height = this.options.minStopHeight;
 		stop.el = addSVGElement(this.containerElement, "rect", {
 			fill: "white", stroke: "black"
 		});
+		stop.el.dataset.stopId = stop.id;
+		stop.el.dataset.type = "stop";
 		stop.label = addSVGElement(
 			this.containerElement, "text",
 			{visibility: "hidden", "class": "-label"}
 		);
 		stop.label.textContent = stop.name;
-		stop.el.onmouseover = () => {this.showStopLabel(stop)}
-		stop.el.onmouseout = () => {this.hideStopLabel(stop)}
 	}
 	
 	
 	drawStop(stop) {
+		stop = this.#getStop(stop);
+		
 		let {x, y, width, height} = stop;
 		
 		({x, y} = this.#coordTransform(x, y));
@@ -194,38 +221,16 @@ class TransitMapDrawer {
 	
 	
 	
-	createLineSegments(lineSection) {
+	createLineParts(lineSection) {
 		for (let service of lineSection.services) {
 			const el = addSVGElement(this.containerElement, "line", {
 				stroke: service.colour,
 				"stroke-width": this.options.lineWidth,
 			})
+			el.dataset.type = "line";
+			el.dataset.serviceId = service.id;
 			
-			service.lineSegments.push(el);
-			
-			el.onmouseover = (event) => {
-				if (!service.persistHighlight) {
-					const {x, y} = getSVGCoords(event.clientX, event.clientY, this.containerElement);
-					this.highlightService(service, x, y);
-				}
-			}
-			
-			el.onclick = (event) => {
-				service.persistHighlight = true;
-				event.thisOne = true;
-				document.addEventListener("click", (event) => {
-					if (event.thisOne) { return };
-					service.persistHighlight = false;
-					this.unhighlightService(service);
-				})
-			}
-			
-			el.onmouseout = () => {
-				if (!service.persistHighlight) {
-					this.unhighlightService(service)
-				}
-			}
-			
+			service.lineParts.push(el);			
 			lineSection.els.push(el);
 		}
 	}
@@ -319,7 +324,10 @@ class TransitMapBase {
 	constructor(drawer, background, svgElement, stops) {
 		Object.assign(this, { drawer, background, svgElement, stops });
 
-		this.svgElement.addEventListener("pointerdown", this.handleClick.bind(this));
+		for (let eventType of ["pointerdown", "mouseover", "mouseout", "click"]) {
+			this.svgElement.addEventListener(eventType, this.eventHandler.bind(this))
+		}
+		
 		this.affectedArea = null;
 		this.movableArea = null;
 		
@@ -356,16 +364,48 @@ class TransitMapBase {
 	
 	// SELECTION
 	
-	async handleClick(event) {
+	async eventHandler(event) {
 		let {x, y} = this.screenToMapCoords(event.x, event.y);
-
-		if (this.affectedArea && this.affectedArea.contains(x, y)) {
-			this.removeMovableArea();
-			await this.selectMovableArea(x, y)
-		} else {
-			this.removeAffectedArea();
-			this.removeMovableArea();
-			await this.selectAffectedArea(x, y);
+		
+		if (event.type == "pointerdown") {
+			if (this.affectedArea && this.affectedArea.contains(x, y)) {
+				this.removeMovableArea();
+				await this.selectMovableArea(x, y)
+			} else {
+				this.removeAffectedArea();
+				this.removeMovableArea();
+				await this.selectAffectedArea(x, y);
+			}
+		} else { // it is a delegated event, hopefully
+			const data = event.target.dataset;			
+			switch (event.type) {
+				case "click":
+					if (data.type == "line") {
+						this.persistentService = data.serviceId;
+						this.drawer.highlightService(data.serviceId, x, y);
+					} else {
+						if (this.persistentService) {
+							this.drawer.unhighlightService(this.persistentService);
+							this.persistentService = null;
+						}
+					}
+				case "mouseover":
+					if (data.type == "stop") {
+						this.drawer.showStopLabel(data.stopId);
+					} else if (data.type == "line") {
+						this.drawer.highlightService(data.serviceId, x, y);
+					}
+					break;
+				case "mouseout":
+					if (data.type == "stop") {
+						this.drawer.hideStopLabel(data.stopId);
+					} else if (data.type == "line") {
+						if (data.serviceId != this.persistentService) {
+							this.drawer.unhighlightService(data.serviceId);
+						}
+					}
+					break;
+			}
 		}
 	}
 	

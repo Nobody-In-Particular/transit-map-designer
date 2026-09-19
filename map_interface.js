@@ -1,10 +1,22 @@
 import { addSVGElement, randomColour } from "./svg_utils/index.js";
 import { TransitMapBackground, TransitMapDrawer, TransitMapBase } from "./transit_map_ui.js";
 
+/*
+Section = line of all services between two stops.
+Segment = line of all services between two routing points.
+Part = one service line between two stops.
+*/
+
 
 class LineSection {
 	constructor({ends, services = [], els = [], routingPoints = []}) {
 		Object.assign(this, {ends, services, routingPoints, els});
+	}
+}
+
+class Service {
+	constructor({id, name, colour, stops = [], lineParts = []}) {
+		Object.assign(this, {id, name, colour, stops, lineParts});
 	}
 }
 
@@ -20,18 +32,19 @@ class TransitMap {
 	initServices(services, stopsMap) {
 		this.services = [];
 		let coloursHad = new Set();
-		for (let [serviceId, timetables] of Object.entries(services)) {
+		for (let [id, [serviceName, timetables]] of Object.entries(Object.entries(services))) {
 		
 			let colour;
 			while (coloursHad.has(colour = randomColour())) {};
 			coloursHad.add(colour);
 
-			this.services.push({
-				id: serviceId,
+			const service = new Service({
+				id: id,
+				name: serviceName,
 				colour: colour,
 				stops: timetables['0'].map(name => stopsMap.get(name)),
-				lineSegments: [],
-			})
+			});
+			this.services.push(service);
 		}
 	}
 	
@@ -65,8 +78,7 @@ class TransitMap {
 	}
 		
 	constructor(
-		element, image, stops, services, minLon, maxLon, minLat, maxLat,
-		drawOptions = {lineWidth: 2, stopMargin: 2, stopRadius: 2, stopOutlineWidth: 1, labelFont: "Arial", labelSize: "12"}
+		element, image, stops, services, minLon, maxLon, minLat, maxLat, drawOptions = {}
 	) {
 		Object.assign(this, {minLon, maxLon, minLat, maxLat});
 		
@@ -79,10 +91,11 @@ class TransitMap {
 		
 		const stopsMap = new Map();
 		this.stops = [];
-		for (let [stop, [lon, lat]] of Object.entries(stops)) {
+		for (let [id, [stop, [lon, lat]]] of Object.entries(Object.entries(stops))) {
 			const stopObj = {
 				...this.baseCoords(lon, lat),
 				name: stop,
+				id: id,
 				lineSections: []
 				// el
 			};
