@@ -9,8 +9,8 @@ Part = one service line between two stops.
 
 
 class LineSection {
-	constructor({ends, services = [], els = [], routingPoints = []}) {
-		Object.assign(this, {ends, services, routingPoints, els});
+	constructor({id, ends, services = [], routingPoints = [], lineSegments = []}) {
+		Object.assign(this, {id, ends, services, routingPoints, lineSegments});
 	}
 }
 
@@ -53,7 +53,7 @@ class TransitMap {
 		const lineKeys = new Map();
 		
 		for (let service of this.services) {
-			let {colour, stops} = service;
+			let {stops} = service;
 			for (let i = 0; i < stops.length - 1; ++i) {
 				let ends = stops.slice(i, i + 2);
 				let endNames = ends.map(s => s.name);
@@ -64,14 +64,16 @@ class TransitMap {
 				
 				if (!(lineKeys.has(lineKey))) { // if this line section not yet encountered
 					
-					const lineSectionObj = new LineSection({ends});
-					lineKeys.set(lineKey, lineSectionObj);
-					this.lineSections.push(lineSectionObj);
+					const lineSection = new LineSection({
+						id: lineKeys.length,
+						ends
+					});
+					lineKeys.set(lineKey, lineSection);
+					this.lineSections.push(lineSection);
 					for (let stopObj of ends) {
-						stopObj.lineSections.push(lineSectionObj);
+						stopObj.lineSections.push(lineSection);
 					}
 				}
-				
 				lineKeys.get(lineKey).services.push(service);
 			}
 		}

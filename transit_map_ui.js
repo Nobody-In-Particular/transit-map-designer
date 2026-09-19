@@ -61,7 +61,6 @@ class TransitMapBackground {
 
 
 
-
 class TransitMapDrawer {
 	constructor(
 		map, containerElement,
@@ -72,12 +71,18 @@ class TransitMapDrawer {
 		this.containerElement = containerElement;
 		this.options = {lineWidth, stopMargin, stopRadius, stopOutlineWidth, labelFont, labelSize, minStopWidth, minStopHeight};
 		
+		this.lineParts = [];
+		
 		for (let lineSection of this.map.lineSections) {
-			this.createLineParts(lineSection);
+			this.#createLineSection(lineSection);
 		}
+		
 		for (let stop of this.map.stops) {
 			this.createStop(stop);
 		}
+		
+
+		
 		this.addServiceLabels();
 		
 		this.pzMatrix = new DOMMatrix();
@@ -151,14 +156,14 @@ class TransitMapDrawer {
 			y: y,
 			visibility: "visible"
 		});
-		for (let otherService of this.map.services) {
-			let {id, lineParts, stops} = otherService;
-			if (otherService != service) {
-				for (let part of lineParts) {
-					editSVGElement(part, {visibility: "hidden"})
-				}
+		
+		
+		for (let part of this.lineParts) {
+			if (part.dataset.serviceId != service.id) {
+				editSVGElement(part, {visibility: "hidden"})
 			}
 		}
+		
 		const thisStopNames = new Set(service.stops.map((s) => s.id));
 		for (let stop of this.map.stops) {
 			if (!thisStopNames.has(stop.id)) {
@@ -169,10 +174,8 @@ class TransitMapDrawer {
 
 	unhighlightService(service) {
 		service = this.#getService(service);
-		for (let {lineParts} of this.map.services) {
-			for (let part of lineParts) {
-				editSVGElement(part, {visibility: "visible"})
-			}
+		for (let part of this.lineParts) {
+			editSVGElement(part, {visibility: "visible"})
 		}
 		for (let stop of this.map.stops) {
 			editSVGElement(stop.el, {visibility: "visible"});
@@ -217,27 +220,36 @@ class TransitMapDrawer {
 		})
 	}
 	
-	
-	
-	
-	
-	createLineParts(lineSection) {
-		for (let service of lineSection.services) {
+	#createLineSegment(lineSection, point0, point1) {
+		const services = lineSection.services;
+		const els = [];
+		for (let service of services) {
 			const el = addSVGElement(this.containerElement, "line", {
-				stroke: service.colour,
-				"stroke-width": this.options.lineWidth,
+				stroke: service.colour, "stroke-width": this.options.lineWidth
 			})
+			
+			els.push(el);
+			this.lineParts.push(el);
+			
 			el.dataset.type = "line";
 			el.dataset.serviceId = service.id;
-			
-			service.lineParts.push(el);			
-			lineSection.els.push(el);
+		}
+		const lineSegment = {els, point0, point1};
+		lineSection.lineSegments.push(lineSegment);
+	}
+	
+	#createLineSection(lineSection) {
+		const {ends: [stop0, stop1], routingPoints} = lineSection;
+		const points = [stop0, ...routingPoints, stop1];
+		for (let i = 0; i < points.length - 1; ++i) {
+			this.#createLineSegment(lineSection, points[i], points[i+1]);
 		}
 	}
 	
-	#drawLineSegment(els, x0, y0, x1, y1, stop0 = null, stop1 = null) {
-		({x: x0, y: y0} = this.#coordTransform(x0, y0));
-		({x: x1, y: y1} = this.#coordTransform(x1, y1));
+	#drawLineSegment(lineSegment) {
+		const {els, point0, point1} = lineSegment;
+		const {x: x0, y: y0} = this.#coordTransform(point0.x, point0.y);
+		const {x: x1, y: y1} = this.#coordTransform(point1.x, point1.y);
 		
 		const [dx, dy] = calcPerpendicularTranslation(x0, y0, x1, y1);
 		const bottomOffset = Math.floor(els.length / 2);
@@ -251,45 +263,33 @@ class TransitMapDrawer {
 				x1: x0 + offsetX, x2: x1 + offsetX,
 				y1: y0 + offsetY, y2: y1 + offsetY
 			}
-
-			editSVGElement(els[i], pts);
+			
+			editSVGElement(els[i], pts)			
 		}
 		
 		const spanX = els.length * Math.abs(dx) * this.options.lineWidth;
 		const spanY = els.length * Math.abs(dy) * this.options.lineWidth;
 		
-		for (let stop of [stop0, stop1]) {
-			if (stop && spanX > stop.width) {
-				stop.width = spanX;
+		for (let point of [point0, point1]) {
+			if (!point.routing && spanX > point.width) {
+				point.width = spanX;
 			}
-			if (stop && spanY > stop.height) {
-				stop.height = spanY;
+			if (!point.routing && spanY > point.height) {
+				point.height = spanY;
 			}
 		}
 	}
 
 	drawLineSection(lineSection) {
-		const {ends: [stop0, stop1], routingPoints, els} = lineSection;
-		const points = [
-			{x: stop0.x, y: stop0.y, stop: stop0},
-			...routingPoints,
-			{x: stop1.x, y: stop1.y, stop: stop1}
-		];
-		for (let i = 0; i < points.length - 1; ++i) {
-			this.#drawLineSegment(
-				els,
-				points[i].x, points[i].y, 
-				points[i+1].x, points[i+1].y,
-				points[i].stop ?? null,
-				points[i + 1].stop ?? null
-			)
+		for (let seg of lineSection.lineSegments) {
+			this.#drawLineSegment(seg);
 		}
 	}
 		
 	
 	addRoutingPoint(lineSection, x, y) {
 		const index = lineSection.routingPoints.length;
-		lineSection.routingPoints.push({x, y});
+		lineSection.routingPoints.push({x, y, routing: true});
 		return index;
 	}
 	
@@ -380,6 +380,7 @@ class TransitMapBase {
 			const data = event.target.dataset;			
 			switch (event.type) {
 				case "click":
+					console.log(x, y);
 					if (data.type == "line") {
 						this.persistentService = data.serviceId;
 						this.drawer.highlightService(data.serviceId, x, y);
