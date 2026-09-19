@@ -65,7 +65,7 @@ class TransitMap {
 				if (!(lineKeys.has(lineKey))) { // if this line section not yet encountered
 					
 					const lineSection = new LineSection({
-						id: lineKeys.length,
+						id: this.lineSections.length,
 						ends
 					});
 					lineKeys.set(lineKey, lineSection);
@@ -113,7 +113,7 @@ class TransitMap {
 		this.background = new TransitMapBackground(this.containerElement, image)
 		
 		this.drawer = new TransitMapDrawer(this, this.containerElement, drawOptions);
-		this.warper = new TransitMapBase(this.drawer, this.background, this.svgElement, this.stops);
+		this.warper = new TransitMapBase(this.drawer, this.background, this.svgElement, this.stops, this.lineSections);
 
 		this.drawer.draw();
 	}

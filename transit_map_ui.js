@@ -1,4 +1,4 @@
-import { addSVGElement, editSVGElement, HTML_URL, calcPerpendicularTranslation, getSVGCoords, transformCoords } from './svg_utils/index.js';
+import { addSVGElement, editSVGElement, HTML_URL, calcPerpendicularTranslation, getSVGCoords, transformCoords, dragging } from './svg_utils/index.js';
 import { Rectangle } from "./rectangle/index.js"
 import { TrapeziumWarper } from "./trapezium_warp.js"
 import { PanZoomListener } from "./panzoom_listener.js";
@@ -69,6 +69,9 @@ class TransitMapDrawer {
 	){
 		this.map = map;
 		this.containerElement = containerElement;
+		this.lineLayer = addSVGElement(this.containerElement, "g");
+		this.stopLayer = addSVGElement(this.containerElement, "g");
+		
 		this.options = {lineWidth, stopMargin, stopRadius, stopOutlineWidth, labelFont, labelSize, minStopWidth, minStopHeight};
 		
 		this.lineParts = [];
@@ -125,12 +128,16 @@ class TransitMapDrawer {
 		return getOrReturnObj(service, this.map.services);
 	}
 	
+	#getLineSection(lineSection) {
+		return getOrReturnObj(lineSection, this.map.lineSections);
+	}
+	
 	
 	showStopLabel(stop) {
 		stop = this.#getStop(stop);
+		const {x, y} = this.#coordTransform(stop.x + stop.width / 2 + 4, stop.y);
 		editSVGElement(stop.label, {
-			x: stop.x + stop.width / 2 + 4,
-			y: stop.y,
+			x, y,
 			visibility: "visible"
 		})
 	}
@@ -193,7 +200,7 @@ class TransitMapDrawer {
 		stop.el.dataset.stopId = stop.id;
 		stop.el.dataset.type = "stop";
 		stop.label = addSVGElement(
-			this.containerElement, "text",
+			this.stopLayer, "text",
 			{visibility: "hidden", "class": "-label"}
 		);
 		stop.label.textContent = stop.name;
@@ -202,7 +209,7 @@ class TransitMapDrawer {
 	
 	drawStop(stop) {
 		stop = this.#getStop(stop);
-		
+
 		let {x, y, width, height} = stop;
 		
 		({x, y} = this.#coordTransform(x, y));
@@ -222,9 +229,10 @@ class TransitMapDrawer {
 	
 	#createLineSegment(lineSection, point0, point1) {
 		const services = lineSection.services;
+		const index = lineSection.lineSegments.length;
 		const els = [];
 		for (let service of services) {
-			const el = addSVGElement(this.containerElement, "line", {
+			const el = addSVGElement(this.lineLayer, "line", {
 				stroke: service.colour, "stroke-width": this.options.lineWidth
 			})
 			
@@ -233,12 +241,22 @@ class TransitMapDrawer {
 			
 			el.dataset.type = "line";
 			el.dataset.serviceId = service.id;
+			el.dataset.lineSectionId = lineSection.id;
+			el.dataset.segmentNumber = index;
 		}
 		const lineSegment = {els, point0, point1};
 		lineSection.lineSegments.push(lineSegment);
 	}
 	
-	#createLineSection(lineSection) {
+	#createLineSection(lineSection) { // also refreshes for re-routing
+	
+		for (let {els} of lineSection.lineSegments) {
+			for (let el of els) {
+				el.remove();
+			}
+		}
+		
+		lineSection.lineSegments = [];
 		const {ends: [stop0, stop1], routingPoints} = lineSection;
 		const points = [stop0, ...routingPoints, stop1];
 		for (let i = 0; i < points.length - 1; ++i) {
@@ -281,37 +299,48 @@ class TransitMapDrawer {
 	}
 
 	drawLineSection(lineSection) {
+		lineSection = this.#getLineSection(lineSection);
 		for (let seg of lineSection.lineSegments) {
 			this.#drawLineSegment(seg);
 		}
 	}
 		
 	
-	addRoutingPoint(lineSection, x, y) {
-		const index = lineSection.routingPoints.length;
-		lineSection.routingPoints.push({x, y, routing: true});
-		return index;
+	createRoutingPoint(lineSection, index, x, y) {
+		const routingPoint = {x, y, routing: true, lineSection};
+		lineSection = this.#getLineSection(lineSection);
+		lineSection.routingPoints.splice(index, 0, routingPoint);
+		this.#createLineSection(lineSection);
+		return routingPoint;
 	}
 	
 	removeRoutingPoint(lineSection, index) {
+		lineSection = this.#getLineSection(lineSection);
 		lineSection.routingPoints.splice(index, 1);
 	}
 		
-	draw(stops = null) {
-		if (stops == null) {
-			stops = this.map.stops;
+	draw(points = null) {
+		if (points == null) {
+			points = this.map.stops;
 		}
 		const lineSectionsToDraw = new Set();
-		for (stop of stops) {
-			for (let lineSection of stop.lineSections) {
-				lineSectionsToDraw.add(lineSection);
+		
+		for (let point of points) {
+			if (point.routing) {
+				lineSectionsToDraw.add(point.lineSection);
+			} else {
+				for (let lineSection of point.lineSections) {
+					lineSectionsToDraw.add(lineSection);
+				}
 			}
 		}
 		for (let lineSection of lineSectionsToDraw) {
 			this.drawLineSection(lineSection);
 		}
-		for (let stop of stops) {
-			this.drawStop(stop);
+		for (let point of points) {
+			if (!point.routing) {
+				this.drawStop(point);
+			}
 		}
 	}
 }
@@ -321,10 +350,10 @@ class TransitMapDrawer {
 
 class TransitMapBase {
 	
-	constructor(drawer, background, svgElement, stops) {
-		Object.assign(this, { drawer, background, svgElement, stops });
+	constructor(drawer, background, svgElement, stops, lineSections) {
+		Object.assign(this, { drawer, background, svgElement, stops, lineSections });
 
-		for (let eventType of ["pointerdown", "mouseover", "mouseout", "click"]) {
+		for (let eventType of ["pointerdown", "mouseover", "mouseout", "click", "dblclick"]) {
 			this.svgElement.addEventListener(eventType, this.eventHandler.bind(this))
 		}
 		
@@ -367,7 +396,7 @@ class TransitMapBase {
 	async eventHandler(event) {
 		let {x, y} = this.screenToMapCoords(event.x, event.y);
 		
-		if (event.type == "pointerdown") {
+		if (event.type == "pointerdown" && event.target.dataset.type != "line") {
 			if (this.affectedArea && this.affectedArea.contains(x, y)) {
 				this.removeMovableArea();
 				await this.selectMovableArea(x, y)
@@ -380,7 +409,6 @@ class TransitMapBase {
 			const data = event.target.dataset;			
 			switch (event.type) {
 				case "click":
-					console.log(x, y);
 					if (data.type == "line") {
 						this.persistentService = data.serviceId;
 						this.drawer.highlightService(data.serviceId, x, y);
@@ -404,6 +432,24 @@ class TransitMapBase {
 						if (data.serviceId != this.persistentService) {
 							this.drawer.unhighlightService(data.serviceId);
 						}
+					}
+					break;
+				case "pointerdown":
+					event.preventDefault();
+					if (data.type == "line") {
+						const routingPoint = this.drawer.createRoutingPoint(
+							data.lineSectionId,
+							data.segmentNumber,
+							Math.round(x), Math.round(y)
+						);
+						await dragging(
+							(x, y) => {
+								routingPoint.x = Math.round(x);
+								routingPoint.y = Math.round(y);
+								this.drawer.drawLineSection(data.lineSectionId);
+							},
+							this.screenToMapCoords.bind(this)
+						);
 					}
 					break;
 			}
@@ -454,12 +500,17 @@ class TransitMapBase {
 	
 	// GETTING SELECTED DATA FOR WARPING
 	
-	#collectStopsInAffectedArea() {
-		this.affectedStops = [];
-		for (let stop of this.stops) {
-			if (this.affectedArea.contains(stop.x, stop.y)) {
+	#collectPointsInAffectedArea() {
+		this.affectedPoints = [];
+		for (let point of this.stops) {
+			if (this.affectedArea.contains(point.x, point.y)) {
 				// NEEDS to put them here as we need the ORIGINAL x and y
-				this.affectedStops.push({origX: stop.x, origY: stop.y, stop});
+				this.affectedPoints.push({origX: point.x, origY: point.y, point});
+			}
+		}
+		for (let lineSection of this.lineSections) {
+			for (let point of lineSection.routingPoints) {
+				this.affectedPoints.push({origX: point.x, origY: point.y, point});
 			}
 		}
 	}
@@ -469,7 +520,7 @@ class TransitMapBase {
 	// WARPING - happens in NON-PANZOOMED SPACE
 	
 	async initWarp() {
-		this.#collectStopsInAffectedArea();
+		this.#collectPointsInAffectedArea();
 
 		this.warper = new TrapeziumWarper(
 			this.affectedArea.bbox,
@@ -484,13 +535,13 @@ class TransitMapBase {
 		this.warper.setDestBox(this.movableArea.bbox);
 		this.warper.warpOnCanvas();
 		
-		for (let {origX, origY, stop} of this.affectedStops) {
+		for (let {origX, origY, point} of this.affectedPoints) {
 			const {newX, newY} = this.warper.warpPoint({x: origX, y: origY});
-			stop.x = Math.round(newX);
-			stop.y = Math.round(newY);
+			point.x = Math.round(newX);
+			point.y = Math.round(newY);
 		}
 		
-		this.drawer.draw(this.affectedStops.map((s) => s.stop));
+		this.drawer.draw(this.affectedPoints.map((s) => s.point));
 	}
 }
 
