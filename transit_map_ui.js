@@ -162,8 +162,7 @@ class TransitMapDrawer {
 			x: x + 4,
 			y: y,
 			visibility: "visible"
-		});
-		
+		});		
 		
 		for (let part of this.lineParts) {
 			if (part.dataset.serviceId != service.id) {
@@ -179,15 +178,16 @@ class TransitMapDrawer {
 		}
 	}
 
-	unhighlightService(service) {
-		service = this.#getService(service);
+	showAllServices() {
 		for (let part of this.lineParts) {
 			editSVGElement(part, {visibility: "visible"})
 		}
 		for (let stop of this.map.stops) {
 			editSVGElement(stop.el, {visibility: "visible"});
 		}
-		editSVGElement(service.label, {visibility: "hidden"});
+		for (let service of this.map.services) {
+			editSVGElement(service.label, {visibility: "hidden"});
+		}
 	}
 
 
@@ -409,19 +409,21 @@ class TransitMapBase {
 			const data = event.target.dataset;			
 			switch (event.type) {
 				case "click":
-					if (data.type == "line") {
-						this.persistentService = data.serviceId;
-						this.drawer.highlightService(data.serviceId, x, y);
-					} else {
-						if (this.persistentService) {
-							this.drawer.unhighlightService(this.persistentService);
-							this.persistentService = null;
+					if (!this.makingRoutingPoint) {
+						if (data.type == "line") {
+							this.persistentService = data.serviceId;
+							this.drawer.highlightService(data.serviceId, x, y);
+						} else {
+							if (this.persistentService) {
+								this.drawer.showAllServices();
+								this.persistentService = null;
+							}
 						}
 					}
 				case "mouseover":
 					if (data.type == "stop") {
 						this.drawer.showStopLabel(data.stopId);
-					} else if (data.type == "line") {
+					} else if (data.type == "line" && !this.makingRoutingPoint) {
 						this.drawer.highlightService(data.serviceId, x, y);
 					}
 					break;
@@ -430,26 +432,31 @@ class TransitMapBase {
 						this.drawer.hideStopLabel(data.stopId);
 					} else if (data.type == "line") {
 						if (data.serviceId != this.persistentService) {
-							this.drawer.unhighlightService(data.serviceId);
+							this.drawer.showAllServices();
 						}
 					}
 					break;
 				case "pointerdown":
 					event.preventDefault();
 					if (data.type == "line") {
-						const routingPoint = this.drawer.createRoutingPoint(
-							data.lineSectionId,
-							data.segmentNumber,
-							Math.round(x), Math.round(y)
-						);
 						await dragging(
-							(x, y) => {
+							(x, y, routingPoint) => {
 								routingPoint.x = Math.round(x);
 								routingPoint.y = Math.round(y);
 								this.drawer.drawLineSection(data.lineSectionId);
 							},
-							this.screenToMapCoords.bind(this)
+							this.screenToMapCoords.bind(this),
+							() => {
+								this.drawer.showAllServices();
+								this.makingRoutingPoint = true;
+								return this.drawer.createRoutingPoint(
+									data.lineSectionId,
+									data.segmentNumber,
+									0, 0
+								)
+							}
 						);
+						this.makingRoutingPoint = false;
 					}
 					break;
 			}
@@ -510,7 +517,9 @@ class TransitMapBase {
 		}
 		for (let lineSection of this.lineSections) {
 			for (let point of lineSection.routingPoints) {
-				this.affectedPoints.push({origX: point.x, origY: point.y, point});
+				if (this.affectedArea.contains(point.x, point.y)) {
+					this.affectedPoints.push({origX: point.x, origY: point.y, point});
+				}
 			}
 		}
 	}
