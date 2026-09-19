@@ -195,7 +195,6 @@ class TransitMapDrawer {
 	
 	
 	createLineSegments(lineSection) {
-		lineSection.els = [];
 		for (let service of lineSection.services) {
 			const el = addSVGElement(this.containerElement, "line", {
 				stroke: service.colour,
@@ -230,18 +229,15 @@ class TransitMapDrawer {
 			lineSection.els.push(el);
 		}
 	}
-
-	drawLineSection(lineSection) {
-		const {ends: [stop0, stop1], services} = lineSection;
-		let {x: x0, y: y0} = stop0;
-		let {x: x1, y: y1} = stop1;
+	
+	#drawLineSegment(els, x0, y0, x1, y1, stop0 = null, stop1 = null) {
 		({x: x0, y: y0} = this.#coordTransform(x0, y0));
 		({x: x1, y: y1} = this.#coordTransform(x1, y1));
 		
 		const [dx, dy] = calcPerpendicularTranslation(x0, y0, x1, y1);
-		const bottomOffset = Math.floor(services.length / 2);
+		const bottomOffset = Math.floor(els.length / 2);
 		
-		for (let i = 0; i < lineSection.els.length; ++i) {
+		for (let i = 0; i < els.length; ++i) {
 			const perpOffset = (i - bottomOffset)*this.options.lineWidth;
 			const offsetX = perpOffset*dx;
 			const offsetY = perpOffset*dy;
@@ -251,22 +247,50 @@ class TransitMapDrawer {
 				y1: y0 + offsetY, y2: y1 + offsetY
 			}
 
-			editSVGElement(lineSection.els[i], pts);
+			editSVGElement(els[i], pts);
 		}
-
-		const spanX = services.length * Math.abs(dx) * this.options.lineWidth;
-		const spanY = services.length * Math.abs(dy) * this.options.lineWidth;
+		
+		const spanX = els.length * Math.abs(dx) * this.options.lineWidth;
+		const spanY = els.length * Math.abs(dy) * this.options.lineWidth;
 		
 		for (let stop of [stop0, stop1]) {
-			if (spanX > stop.width) {
+			if (stop && spanX > stop.width) {
 				stop.width = spanX;
 			}
-			if (spanY > stop.height) {
+			if (stop && spanY > stop.height) {
 				stop.height = spanY;
 			}
 		}
 	}
+
+	drawLineSection(lineSection) {
+		const {ends: [stop0, stop1], routingPoints, els} = lineSection;
+		const points = [
+			{x: stop0.x, y: stop0.y, stop: stop0},
+			...routingPoints,
+			{x: stop1.x, y: stop1.y, stop: stop1}
+		];
+		for (let i = 0; i < points.length - 1; ++i) {
+			this.#drawLineSegment(
+				els,
+				points[i].x, points[i].y, 
+				points[i+1].x, points[i+1].y,
+				points[i].stop ?? null,
+				points[i + 1].stop ?? null
+			)
+		}
+	}
+		
 	
+	addRoutingPoint(lineSection, x, y) {
+		const index = lineSection.routingPoints.length;
+		lineSection.routingPoints.push({x, y});
+		return index;
+	}
+	
+	removeRoutingPoint(lineSection, index) {
+		lineSection.routingPoints.splice(index, 1);
+	}
 		
 	draw(stops = null) {
 		if (stops == null) {

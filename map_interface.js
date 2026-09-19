@@ -2,6 +2,13 @@ import { addSVGElement, randomColour } from "./svg_utils/index.js";
 import { TransitMapBackground, TransitMapDrawer, TransitMapBase } from "./transit_map_ui.js";
 
 
+class LineSection {
+	constructor({ends, services = [], els = [], routingPoints = []}) {
+		Object.assign(this, {ends, services, routingPoints, els});
+	}
+}
+
+
 class TransitMap {
 	baseCoords(lon, lat) {
 		return {
@@ -44,9 +51,7 @@ class TransitMap {
 				
 				if (!(lineKeys.has(lineKey))) { // if this line section not yet encountered
 					
-					const lineSectionObj = {
-						ends: ends, services: []
-					}
+					const lineSectionObj = new LineSection({ends});
 					lineKeys.set(lineKey, lineSectionObj);
 					this.lineSections.push(lineSectionObj);
 					for (let stopObj of ends) {
