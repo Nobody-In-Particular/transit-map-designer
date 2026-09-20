@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: index.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: index.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import { dragging, addSVGElement, editSVGElement, getSVGCoords, transformCoords, transformBbox } from "../svg_utils/index.js"
+
+function setToBounds(val, bounds) {
+	if (val > bounds[1]) {
+		return bounds[1];
+	} else if (val &lt; bounds[0]) {
+		return bounds[0];
+	} else {
+		return val;
+	}
+}
+
+/**
+
+@typedef {Object} bbox
+@property {number} x
+@property {number} y
+@property {number} width
+@property {number} height
+*/
+/**
+@typedef {Array} bounds
+@property {number} 0 - the lower bound (inclusive)
+@property {number} 1 - the upper bound (inclusive)
+
+*/
+
+/**
+@class
+API for an SVG rectangle with various utilities
+*/
+
+class Rectangle {
+	#resizers = false;
+	#cornerResizers = [];	
+	#edgeResizers = [];
+
+	/**
+	@param {SVGElement} parentElement - initial value for {@link Rectangle#parentElement}
+	@param {bbox} bbox - initial bounding box for the rectangle
+	@param {Object} style - style and other attributes for the rectangle SVG element
+	@param {boolean} flipabble - initial value for flippable property
+	@param {Object} optionalInitialValues
+	@param {bounds} [optionalInitialValues.xBounds=null] - initial value for {@link Rectangle#xBounds}
+	@param {bounds} [optionalInitialValues.yBounds=null] - initial value for {@link Rectangle#yBounds}
+	@param {boolean} [optionalInitialValues.round=null] - initial value for {@link Rectangle#round}
+	@param {DOMMatrixReadOnly} [optionalInitialValues.coordTransformMatrix=null] - initial value for {@link Rectangle#coordTransformMatrix}
+	*/
+	constructor(parentElement, bbox, style, flippable,
+		{xBounds = null, yBounds = null, round = true, coordTransformMatrix = new DOMMatrixReadOnly()} = {},
+	){
+		/** @member {boolean} - whether to round all corner values to the nearest integer when moving/setting */
+		this.round = round;
+		
+		if (this.round) {
+			this.bbox = {
+				x: Math.round(bbox.x),
+				y: Math.round(bbox.y),
+				width: Math.round(bbox.width),
+				height: Math.round(bbox.height)
+			}
+		} else {
+			this.bbox = {...bbox}
+		}
+		
+		this.resetFlip();
+		/** @member {SVGElement} - the parent SVG element for the rectangle*/
+		this.parentElement = parentElement;
+		this.element = addSVGElement(drawElement, "rect", {
+			...style,
+		});
+		
+
+
+		
+		/** @member {boolean} - Can the rectangle be flipped - i.e., can the initial right edge come further left than
+		the left edge, and the initial bottom edge further up than the top edge */
+		this.flippable = flippable;
+		/** @member {bounds} - Inclusive left/right boundaries for *any* of the rectangle */
+		this.xBounds = xBounds;
+		/** @member {bounds} - Inclusive up/down boundaries for *any* of the rectangle */
+		this.yBounds = yBounds;
+		/** @member {DOMMatrixReadOnly} - Matrix to transform coordinates before drawing. The inverse is used to transform
+		mouse coordinates to rectangle coordinates when dragging/resizing.
+		This is *not* for transforming between screen and SVG coordinates - that is done automatically
+		anyway. This matrix should transform between some "virtual" coordinates and SVG coordinates. */
+		this.coordTransformMatrix = coordTransformMatrix;
+		
+		/** @member {boolean} - have any of the rectangle's points changed */
+		this.changed = false;
+	}
+	
+	#coordTransform({x, y}, inverse = false) {
+		const matrix = inverse ? this.coordTransformMatrix.inverse() : this.coordTransformMatrix;
+		return transformCoords(x, y, matrix);
+	}
+	
+	#transformFromScreen({x, y}) {
+		return this.#coordTransform(getSVGCoords(x, y, this.parentElement), true);
+	}
+		
+	#draggingProxy(func) {
+		return dragging(
+			func,
+			((x, y) => this.#transformFromScreen({x, y})).bind(this)
+		)
+	}
+	
+	#updateBbox() {
+		this.bbox = {
+			x: Math.min(this.x0, this.x1),
+			y: Math.min(this.y0, this.y1),
+			width: Math.abs(this.x1 - this.x0),
+			height: Math.abs(this.y1 - this.y0)
+		}
+	}
+	
+	/** draw */
+	draw() {
+		this.#alignResizers();
+		editSVGElement(
+			this.element,
+			transformBbox(this.bbox, this.coordTransformMatrix)
+		)
+	}
+	
+	resetFlip() {
+		this.x0 = this.bbox.x;
+		this.y0 = this.bbox.y;
+		this.x1 = this.x0 + this.bbox.width;
+		this.y1 = this.y0 + this.bbox.height;
+	}
+
+	set(prop, val) {
+		if (!this.flippable) {
+			switch (prop) {
+				case "x0":
+					val = Math.min(val, this.x1);
+					break;
+				case "x1":
+					val = Math.max(val, this.x0);
+					break;
+				case "y0":
+					val = Math.min(val, this.y1);
+					break;
+				case "y1":
+					val = Math.max(val, this.y0);
+					break;
+			}
+		}
+		
+		if (this.round) {
+			val = Math.round(val);
+		}
+
+		if (this.xBounds &amp;&amp; prop[0] == "x") {
+			val = setToBounds(val, this.xBounds);
+		}
+		if (this.yBounds &amp;&amp; prop[0] == "y") {
+			val = setToBounds(val, this.yBounds);
+		}
+		
+		if (val != this[prop]) {
+			this.changed = true;
+		}
+		this[prop] = val;
+		this.#updateBbox();
+		this.draw();
+	}
+	
+	setPoint0AndShift(x, y) {
+		let dx = x - this.x0;
+		let dy = y - this.y0;
+		if (this.round) {
+			dx = Math.round(dx);
+			dy = Math.round(dy);
+		}
+		if (dx != 0 || dy != 0) {
+			this.changed = true;
+		}
+		this.x0 += dx;
+		this.x1 += dx;
+		this.y0 += dy;
+		this.y1 += dy;
+		let [xLow, xHigh] = this.x0 &lt; this.x1 ? ["x0", "x1"] : ["x1", "x0"];
+		let [yLow, yHigh] = this.y0 &lt; this.y1 ? ["y0", "y1"] : ["y1", "y0"];
+		
+		if (this.xBounds) {
+			this[xLow] = setToBounds(this[xLow], [this.xBounds[0], this.xBounds[1] - this.bbox.width]);
+			this[xHigh] = this[xLow] + this.bbox.width;
+			
+		}
+		if (this.yBounds) {
+			this[yLow] = setToBounds(this[yLow], [this.yBounds[0], this.yBounds[1] - this.bbox.height]);
+			this[yHigh] = this[yLow] + this.bbox.height;
+		}
+		this.#updateBbox();
+		this.draw();
+	}
+		
+	remove() {
+		this.element.remove();
+		this.#removeResizers();
+	}
+	
+	contains(x, y) {
+		return this.bbox.x &lt;= x &amp;&amp; x &lt; this.bbox.x + this.bbox.width &amp;&amp; this.bbox.y &lt;= y &amp;&amp; y &lt; this.bbox.y + this.bbox.height;
+	}
+	
+	asBounds() {
+		return {
+			xBounds: [this.bbox.x, this.bbox.x + this.bbox.width],
+			yBounds: [this.bbox.y, this.bbox.y + this.bbox.height]
+		}
+	}
+	
+	static async selectArea(element, x, y, style, options) {
+		const rect = new Rectangle(
+			element,
+			{x, y, width: 0, height: 0},
+			style,
+			true,
+			options
+		);
+				
+		await rect.#draggingProxy(
+			(x, y) => {
+				x = Math.round(x);
+				y = Math.round(y);
+				rect.set("x1", x);
+				rect.set("y1", y);
+			}
+		)
+		if (rect.changed) {
+			return rect;
+		} else {
+			return null;
+		}
+	}
+	
+	#resizerProps(i) {
+		let bit0 = (i &amp; 2) >> 1;
+		let bit1 = (i &amp; 1);
+		return {
+			"corner": ["x" + bit0, "y" + bit1],
+			"edge": (bit0 ? "x" : "y") + bit1
+		}
+	}
+	
+	#createResizer(ref) {
+		return addSVGElement(this.parentElement, "use", {
+			"href": "#" + ref
+		})
+	}
+	
+	async #dragResize(event, props, callback) {
+		event.stopPropagation();
+		let circleRect = event.target.getBoundingClientRect();
+		let offsetFromCentre = {
+			x: event.x - (circleRect.x + circleRect.width / 2),
+			y: event.y - (circleRect.y + circleRect.height / 2)
+		};
+		await this.#draggingProxy(
+			((x, y) => {
+				for (let prop of props) {
+					if (prop[0] == "x") {
+						var val = x - offsetFromCentre.x
+					} else {
+						var val = y - offsetFromCentre.y
+					}
+					this.set(prop, val);
+				}
+				this.#alignResizers();
+				callback();
+			})
+		);
+	}
+
+	allowResize(callback, useRef) {
+		this.#resizers = true;
+		
+		for (let i = 0; i &lt; 4; ++i) {
+			let props = this.#resizerProps(i);
+			
+			let cornerResizer = this.#createResizer(useRef);
+			cornerResizer.onpointerdown = (event) => {
+				this.#dragResize(event, props.corner, callback);
+			};
+			this.#cornerResizers.push(cornerResizer);
+			
+			let edgeResizer = this.#createResizer(useRef);
+			edgeResizer.onpointerdown = (event) => {
+				this.#dragResize(event, [props.edge], callback)
+			}
+			this.#edgeResizers.push(edgeResizer);
+		}
+		this.#alignResizers();
+	}
+
+	
+	allowDrag(callback, inside = true) {
+		if (inside) {
+			this.element.style.pointerEvents = "visibleFill";
+		} else {
+			this.element.style.pointerEvents = "visiblePainted";
+		}
+		this.element.addEventListener("pointerdown", async (event) => {
+			event.stopPropagation();
+			let {x, y} = this.#transformFromScreen({x: event.x, y: event.y});
+			let xRel = x - this.x0;
+			let yRel = y - this.y0;
+			await this.#draggingProxy(
+				(x, y) => {
+					this.setPoint0AndShift(x - xRel, y - yRel);
+					callback();
+				}
+			);
+		})
+	}
+	
+	allowResizeAndDrag(callback, useRef, inside=true) {
+		this.allowResize(callback, useRef);
+		this.allowDrag(callback, inside);
+	}
+	
+	#alignResizers() {
+		if (this.#resizers) {
+			for (let i = 0; i &lt; 4; ++i) {
+				const props = this.#resizerProps(i);
+				
+				editSVGElement(this.#cornerResizers[i], this.#coordTransform({
+					x: this[props.corner[0]],
+					y: this[props.corner[1]]
+				}));
+				
+				if (props.edge[0] == "y") {
+					var pos = {
+						x: this.bbox.x + this.bbox.width / 2,
+						y: this[props.edge]
+					}
+				} else {
+					var pos = {
+						y: this.bbox.y + this.bbox.height / 2,
+						x: this[props.edge]
+					}
+				}
+				editSVGElement(this.#edgeResizers[i], this.#coordTransform(pos));
+			}
+		}
+	}
+	
+	#removeResizers() {
+		if (this.#resizers) {
+			for (let el of this.#cornerResizers.concat(this.#edgeResizers)) {
+				el.remove();
+			}
+		}
+	}
+}
+
+export { Rectangle };
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="Rectangle.html">Rectangle</a></li></ul><h3><a href="global.html">Global</a></h3>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Sun Sep 20 2026 17:37:09 GMT+0100 (British Summer Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>
