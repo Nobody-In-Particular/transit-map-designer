@@ -135,9 +135,9 @@ class TransitMapDrawer {
 	
 	showStopLabel(stop) {
 		stop = this.#getStop(stop);
-		const {x, y} = this.#coordTransform(stop.x + stop.width / 2 + 4, stop.y);
+		const {x, y} = this.#coordTransform(stop.x, stop.y);
 		editSVGElement(stop.label, {
-			x, y,
+			x + stop.width / 2 + 4, y,
 			visibility: "visible"
 		})
 	}
