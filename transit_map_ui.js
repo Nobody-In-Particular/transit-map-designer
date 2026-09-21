@@ -63,11 +63,11 @@ class TransitMapBackground {
 
 class TransitMapDrawer {
 	constructor(
-		map, containerElement,
+		spec, containerElement,
 		{lineWidth = 3, stopMargin = 2, stopRadius = 2, stopOutlineWidth = 1, labelFont = "Arial", labelSize = "12",
 		minStopWidth = 4, minStopHeight = 4}
 	){
-		this.map = map;
+		this.mapSpec = spec;
 		this.containerElement = containerElement;
 		this.lineLayer = addSVGElement(this.containerElement, "g");
 		this.stopLayer = addSVGElement(this.containerElement, "g");
@@ -76,15 +76,13 @@ class TransitMapDrawer {
 		
 		this.lineParts = [];
 		
-		for (let lineSection of this.map.lineSections) {
+		for (let lineSection of this.mapSpec.lineSections) {
 			this.#createLineSection(lineSection);
 		}
 		
-		for (let stop of this.map.stops) {
+		for (let stop of this.mapSpec.stops) {
 			this.createStop(stop);
 		}
-		
-
 		
 		this.addServiceLabels();
 		
@@ -106,14 +104,14 @@ class TransitMapDrawer {
 	
 	
 	addServiceLabels() {		
-		addSVGElement(this.map.svgElement, "style").textContent = `
+		addSVGElement(this.containerElement, "style").textContent = `
 			.-label {
 				font-family: ${this.options.labelFont};
 				font-size: ${this.options.labelSize}px;
 			}
 		`
 		
-		for (let service of this.map.services) {
+		for (let service of this.mapSpec.services) {
 			const label = addSVGElement(this.containerElement, "text", {visibility: "hidden", "class": "-label"});
 			label.textContent = service.name;
 			service.label = label;
@@ -121,15 +119,15 @@ class TransitMapDrawer {
 	}
 	
 	#getStop(stop) {
-		return getOrReturnObj(stop, this.map.stops);
+		return getOrReturnObj(stop, this.mapSpec.stops);
 	}
 	
 	#getService(service) {
-		return getOrReturnObj(service, this.map.services);
+		return getOrReturnObj(service, this.mapSpec.services);
 	}
 	
 	#getLineSection(lineSection) {
-		return getOrReturnObj(lineSection, this.map.lineSections);
+		return getOrReturnObj(lineSection, this.mapSpec.lineSections);
 	}
 	
 	
@@ -171,7 +169,7 @@ class TransitMapDrawer {
 		}
 		
 		const thisStopNames = new Set(service.stops.map((s) => s.id));
-		for (let stop of this.map.stops) {
+		for (let stop of this.mapSpec.stops) {
 			if (!thisStopNames.has(stop.id)) {
 				editSVGElement(stop.el, {visibility: "hidden"});
 			}
@@ -182,10 +180,10 @@ class TransitMapDrawer {
 		for (let part of this.lineParts) {
 			editSVGElement(part, {visibility: "visible"})
 		}
-		for (let stop of this.map.stops) {
+		for (let stop of this.mapSpec.stops) {
 			editSVGElement(stop.el, {visibility: "visible"});
 		}
-		for (let service of this.map.services) {
+		for (let service of this.mapSpec.services) {
 			editSVGElement(service.label, {visibility: "hidden"});
 		}
 	}
@@ -321,7 +319,7 @@ class TransitMapDrawer {
 		
 	draw(points = null) {
 		if (points == null) {
-			points = this.map.stops;
+			points = this.mapSpec.stops;
 		}
 		const lineSectionsToDraw = new Set();
 		
@@ -350,8 +348,8 @@ class TransitMapDrawer {
 
 class TransitMapBase {
 	
-	constructor(drawer, background, svgElement, stops, lineSections) {
-		Object.assign(this, { drawer, background, svgElement, stops, lineSections });
+	constructor(spec, drawer, background, svgElement) {
+		Object.assign(this, { drawer, background, svgElement, stops: spec.stops, lineSections: spec.lineSections });
 
 		for (let eventType of ["pointerdown", "mouseover", "mouseout", "click", "dblclick"]) {
 			this.svgElement.addEventListener(eventType, this.eventHandler.bind(this))
