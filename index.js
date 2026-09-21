@@ -101,7 +101,7 @@ class TransitMapSpec {
 }
 
 
-class TransitMap {		
+class TransitMap {
 	constructor(
 		element, image, stops, services, minLon, maxLon, minLat, maxLat, drawOptions = {}
 	) {
@@ -115,7 +115,6 @@ class TransitMap {
 		this.height = image.height;
 		
 		this.spec = TransitMapSpec.createFromObjects(stops, services, this.width, this.height, minLon, maxLon, minLat, maxLat);
-		
 		
 		this.containerElement = addSVGElement(this.svgElement, "g", {x: 0, y: 0});
 		

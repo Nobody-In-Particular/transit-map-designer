@@ -4,3 +4,6 @@
 [submodule "svg_utils"]
 	path = svg_utils
 	url = git@github.com:Nobody-In-Particular/svg_utils.git
+[submodule "transitland-wrapper"]
+	path = transitland-wrapper
+	url = https://github.com/Nobody-In-Particular/transitland-wrapper
