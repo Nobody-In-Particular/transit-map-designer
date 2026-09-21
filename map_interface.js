@@ -20,6 +20,14 @@ class Service {
 	}
 }
 
+class TransitMapSpec() {
+	constructor(services, stops, lineSections) {
+		this.services = services;
+		this.stops = stops;
+		this.lineSections = lineSections;
+	}
+}
+
 
 class TransitMap {
 	baseCoords(lon, lat) {

@@ -482,7 +482,7 @@ class TransitMapBase {
 		if (this.movableArea) {
 			this.movableArea.resetFlip();
 			this.movableArea.flippable = false;
-			this.movableArea.allowResizeAndDrag(this.onMove.bind(this), "resizer");
+			this.movableArea.allowResizeAndDrag(this.onMove.bind(this), "#resizer");
 			this.initWarp();
 		}
 	
