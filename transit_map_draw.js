@@ -294,6 +294,12 @@ class TransitMapDrawer {
 		}
 	}
 		
+	reIndexRoutingPoints(lineSection) {
+		for (let [newIndex, point] of Object.entries(lineSection.routingPoints)) {
+			point.index = parseInt(newIndex);
+			point.el.dataset.index = newIndex;
+		}
+	}
 	
 	createRoutingPoint(lineSection, index, x, y, type) {
 		lineSection = this.#getLineSection(lineSection);
@@ -314,6 +320,8 @@ class TransitMapDrawer {
 		routingPoint.label = label;
 		
 		lineSection.routingPoints.splice(index, 0, routingPoint);
+		this.reIndexRoutingPoints(lineSection);
+		
 		this.#createLineSegments(lineSection);
 		return routingPoint;
 	}
@@ -339,10 +347,7 @@ class TransitMapDrawer {
 		}
 		lineSection.routingPoints.splice(index, 1);
 		
-		for (let [newIndex, point] of Object.entries(lineSection.routingPoints)) {
-			point.index = parseInt(newIndex);
-			point.el.dataset.index = newIndex;
-		}
+		this.reIndexRoutingPoints(lineSection);
 	}
 	
 	drawRoutingPointOnly(routingPoint) {
@@ -384,8 +389,9 @@ class TransitMapDrawer {
 	correctRoutingPoint(routingPoint) {
 		if (routingPoint.type == this.AUTOMATIC) {
 			const [neighbour0, neighbour1] = this.getRoutingPointNeighbours(routingPoint);
-			console.log(neighbour0, neighbour1);
+			console.log({x: neighbour0.x, y: neighbour0.y}, {x: neighbour1.x, y: neighbour1.y});
 			const {x, y} = Module.get_routing_point(neighbour0, neighbour1, routingPoint);
+			console.log(x, y);
 			routingPoint.x = x;
 			routingPoint.y = y;
 		}

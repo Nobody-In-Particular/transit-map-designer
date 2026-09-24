@@ -9,22 +9,25 @@ class Handler {
 		this.map = map;
 	}
 	
-	async onDragRoutingPoint(x, y, routingPoint) {
+	async onDragRoutingPoint(x, y, routingPoint, updateAsDrag = false) {
 		routingPoint.x = Math.round(x);
 		routingPoint.y = Math.round(y);
+		if (updateAsDrag) {
+			this.map.drawer.correctRoutingPoint(routingPoint);
+		}
 		this.map.drawer.drawRoutingPoint(routingPoint);
 	}
 	
 	showRoutingPoint(routingPoint) {
 		routingPoint.el.style.opacity = 1;
-		routingPoint.label.style.opacity = 1;
+		routingPoint.label.style.visibility = "visible";
 		this.shownRoutingPoint = routingPoint;
 	}
 	
 	hideRoutingPoint() {
 		if (this.shownRoutingPoint) {
 			this.shownRoutingPoint.el.style.opacity = 0;
-			this.shownRoutingPoint.label.style.opacity = 0;
+			this.shownRoutingPoint.label.style.visibility = "hidden";
 			this.shownRoutingPoint = null;
 		}
 	}
@@ -90,6 +93,7 @@ class Handler {
 					this.rerouting = true;
 					const routingPoint = this.map.drawer.getRoutingPointFromEl(target);
 					this.showRoutingPoint(routingPoint);
+					//const updateAsDrag = this.map.drawer.getRoutingPointNeighbours(routingPoint).filter((p) => p.type == this.map.drawer.AUTOMATIC).length > 0;
 					const moved = await dragging(
 						((x, y) => this.onDragRoutingPoint(x, y, routingPoint)).bind(this),
 						this.map.screenToMapCoords.bind(this.map),

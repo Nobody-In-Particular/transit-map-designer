@@ -46,31 +46,22 @@ double closest(N val, const std::vector<N>& arr) {
 
 Point get_routing_point(Point fixed0, Point fixed1, Point guide) {
 	
-	if (fixed0.x > fixed1.x) {
-		std::swap(fixed0.x, fixed1.x);
-	}
-	if (fixed0.y > fixed1.y) {
-		std::swap(fixed0.y, fixed1.y);
-	}
-	
-	double width { fixed1.x - fixed0.x };
-	double height { fixed1.y - fixed0.y };
+	double width { std::fabs(fixed1.x - fixed0.x) };
+	double height { std::fabs(fixed1.y - fixed0.y) };
 	
 	std::pair<Point, Point> candidates {};
 
 	if (height == width) { // straight 45 degrees
-		candidates = {
-			{fixed0.x, fixed0.y}, {fixed0.y, fixed1.y}
-		};
+		candidates = {fixed0, fixed1};
 	} else if (height > width) { // orthogonal line is vertical
 		candidates = {
-			{fixed0.x, fixed1.y - width},
-			{fixed1.x, fixed0.y + width}
+			{fixed0.x, fixed1.y > fixed0.y ? fixed1.y - width : fixed1.y + width},
+			{fixed1.x, fixed0.y > fixed1.y ? fixed0.y - width : fixed0.y + width}
 		};
 	} else { // orthogonal line is horizontal
 		candidates = {
-			{fixed1.x - height, fixed0.y},
-			{fixed0.x + height, fixed1.y}
+			{fixed1.x > fixed0.x ? fixed1.x - height : fixed1.x + height, fixed0.y},
+			{fixed0.x > fixed1.x ? fixed0.x - height : fixed0.x + height, fixed1.y}
 		};
 	}
 	
