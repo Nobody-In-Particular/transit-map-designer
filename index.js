@@ -3,7 +3,7 @@ import Rectangle from "./rectangle/index.js";
 import { TrapeziumWarper } from "./trapezium_warp.js";
 import { TransitMapBackground, TransitMapDrawer } from "./transit_map_draw.js";
 import TransitMapSpec from "./transit_map_spec.js";
-import handler from "./transit_map_default_ui.js";
+import Handler from "./transit_map_default_ui.js";
 import { PanZoomListener } from "./panzoom_listener.js";
 
 
@@ -13,7 +13,7 @@ Segment = line of all services between two routing points.
 Part = one service line between two stops.
 */
 
-function createTransitMap(element, image, stops, services, minLon, maxLon, minLat, maxLat, drawOptions = {}, eventHandler = handler) {
+function createTransitMap(element, image, stops, services, minLon, maxLon, minLat, maxLat, drawOptions = {}, eventHandlerClass = Handler) {
 	const width = image.width;
 	const height = image.height;
 	
@@ -26,22 +26,24 @@ function createTransitMap(element, image, stops, services, minLon, maxLon, minLa
 	const drawer = new TransitMapDrawer(spec, containerElement, drawOptions);
 	drawer.draw();
 	
-	return new TransitMap(spec, drawer, background, element, eventHandler);
+	return new TransitMap(spec, drawer, background, element, eventHandlerClass);
 	
 }
 
 class TransitMap {
-	constructor(spec, drawer, background, svgElement, eventHandler) {
+	constructor(spec, drawer, background, svgElement, eventHandlerClass) {
 		Object.assign(this, {
 			drawer,
 			background,
 			svgElement,
-			eventHandler,
+			eventHandlerClass,
 			stops: spec.stops,
 			lineSections: spec.lineSections
 		});
 		
-		for (let eventType of ["pointerdown", "mouseover", "mouseout", "click", "dblclick"]) {
+		this.handler = new eventHandlerClass(this);
+		
+		for (let eventType of ["pointerdown", "mouseover", "mouseout", "click", "dblclick", "pointermove", "pointerup"]) {
 			this.svgElement.addEventListener(
 				eventType, this.delegateEvent.bind(this)
 			)
@@ -79,7 +81,7 @@ class TransitMap {
 	
 	async delegateEvent(event) {
 		let {x, y} = this.screenToMapCoords(event.x, event.y);
-		this.eventHandler(x, y, event.type, event.target);
+		this.handler.handle(x, y, event.type, event.target);
 	}
 	
 	async selectAffectedArea(x, y) {

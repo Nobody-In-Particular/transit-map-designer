@@ -1,4 +1,5 @@
 import { addSVGElement, editSVGElement, HTML_URL, calcPerpendicularTranslation, getSVGCoords, transformCoords, dragging } from './svg_utils/index.js';
+import "./routing_wasm.js";
 
 
 function getOrReturnObj(val, arr) {
@@ -355,10 +356,44 @@ class TransitMapDrawer {
 		this.drawLineSection(routingPoint.lineSection);
 	}
 	
-	updateAutomaticRouting(routingPoints = null) {
-		
+	* allRoutingPoints() {
+		for (let lineSection of this.mapSpec.lineSections) {
+			for (let routingPoint of lineSection.routingPoints) {
+				yield routingPoint;
+			}
+		}
 	}
-				
+	
+	getPointOnLineSection(lineSection, index) {
+		if (index == 0) {
+			return lineSection.ends[0];
+		} else if (index == lineSection.routingPoints.length + 1) {
+			return lineSection.ends[1];
+		} else {
+			return lineSection.routingPoints[index - 1];
+		}
+	}
+	
+	getRoutingPointNeighbours(routingPoint) {
+		return [
+			this.getPointOnLineSection(routingPoint.lineSection, routingPoint.index), // + 1 to get index on line section, -1 to get before
+			this.getPointOnLineSection(routingPoint.lineSection, routingPoint.index + 2) // + 1, + !
+		];
+	}
+	
+	correctRoutingPoint(routingPoint) {
+		if (routingPoint.type == this.AUTOMATIC) {
+			const [neighbour0, neighbour1] = this.getRoutingPointNeighbours(routingPoint);
+			console.log(neighbour0, neighbour1);
+			const {x, y} = Module.get_routing_point(neighbour0, neighbour1, routingPoint);
+			routingPoint.x = x;
+			routingPoint.y = y;
+		}
+	}
+	
+	updateAutomaticRouting(lineSections = null) {
+	}
+
 	draw(points = null) {
 		if (points == null) {
 			points = this.mapSpec.stops;
