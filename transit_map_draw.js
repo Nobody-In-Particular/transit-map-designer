@@ -299,7 +299,7 @@ class TransitMapDrawer {
 		lineSection = this.#getLineSection(lineSection);
 
 		const routingPoint = {
-			x, y, type, lineSection, index,
+			x, y, type, lineSection, index: parseInt(index),
 			routing: true,
 		};
 		
@@ -340,7 +340,7 @@ class TransitMapDrawer {
 		lineSection.routingPoints.splice(index, 1);
 		
 		for (let [newIndex, point] of Object.entries(lineSection.routingPoints)) {
-			point.index = newIndex;
+			point.index = parseInt(newIndex);
 			point.el.dataset.index = newIndex;
 		}
 	}
@@ -377,7 +377,7 @@ class TransitMapDrawer {
 	getRoutingPointNeighbours(routingPoint) {
 		return [
 			this.getPointOnLineSection(routingPoint.lineSection, routingPoint.index), // + 1 to get index on line section, -1 to get before
-			this.getPointOnLineSection(routingPoint.lineSection, routingPoint.index + 2) // + 1, + !
+			this.getPointOnLineSection(routingPoint.lineSection, routingPoint.index + 2) // + 1, + 1
 		];
 	}
 	
