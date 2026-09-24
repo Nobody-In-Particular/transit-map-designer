@@ -84,6 +84,25 @@ Point snap_to_angle(Point fixed, Point guide) {
 	return to_cartesian(radius, angle);
 }
 
+std::array<Point, 2> get_routing_points_half_fixed(
+	Point fixed_guide, Point fixed_corrector, Point guide, Point corrector
+	// fixed_x is the fixed point on the x side
+){
+	Point snapped { snap_to_angle(fixed_guide, guide) };
+	return {
+		snapped, get_routing_point(snapped, fixed_corrector, corrector)
+	};
+}
+
+std::vector<Point> get_multiple_routing_points(const std::vector<std::array<Point, 3>>& args) {
+	std::vector<Point> result;
+	result.reserve(args.size());
+	for (std::array<Point, 3> spec : args) {
+		result.push_back(get_routing_point(spec[0], spec[1], spec[2]));
+	}
+	return result;
+}
+
 EMSCRIPTEN_BINDINGS(routing) {
 	emscripten::value_object<Point>("Point")
 		.field("x", &Point::x)
