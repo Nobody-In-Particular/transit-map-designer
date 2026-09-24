@@ -303,7 +303,7 @@ class TransitMapDrawer {
 		};
 		
 		const el = addSVGElement(this.stopLayer, "use", {href: "#" + this.options.routingPointElementId, "class": "routing-point graphic"});
-		const label = addSVGElement(this.labelLayer, "text", {"class": "routing-point label"});		
+		const label = addSVGElement(this.labelLayer, "text", {"class": "routing-point label"});
 		
 		el.dataset.type = "routing-point";
 		el.dataset.lineSectionId = lineSection.id;

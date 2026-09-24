@@ -25,6 +25,10 @@ async function handler(x, y, type, target) {
 					this.drawer.highlightService(data.serviceId, x, y);
 				} else if (data.type == "stop") {
 					this.drawer.showStopLabel(data.stopId);
+				} else if (data.type == "routing-point") {
+					const routingPoint = this.drawer.getRoutingPointFromEl(target);
+					target.style.opacity = 1;
+					routingPoint.label.style.opacity = 1;
 				}
 			}
 			break;
@@ -34,6 +38,10 @@ async function handler(x, y, type, target) {
 					this.drawer.showAllServicesAndHideLabels();
 				} else if (data.type == "stop" ) {
 					this.drawer.hideStopLabel(data.stopId);
+				} else if (data.type == "routing-point") {
+					const routingPoint = this.drawer.getRoutingPointFromEl(target);
+					target.style.opacity = 0;
+					routingPoint.label.style.opacity = 0;
 				}
 			}
 			break;
@@ -57,6 +65,8 @@ async function handler(x, y, type, target) {
 							this.drawer.WARPING
 						)
 						updateRoutingPointLabel(routingPoint);
+						routingPoint.el.style.opacity = 1;
+						routingPoint.label.style.opacity = 1;
 						return routingPoint;
 					}
 				);
