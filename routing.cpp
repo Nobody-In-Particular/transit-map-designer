@@ -19,12 +19,19 @@ double get_square_distance(Point p0, Point p1) {
 }
 
 double get_angle(Point p0, Point p1) {
+	if (p1.x - p0.x == 0) {
+		return p1.y - p0.y > 0 ? 90 : 270;
+	}
+	
 	double gradient { (p1.y - p0.y)/(p1.x - p0.x) };
 	double uncorrected { 180 * std::atan(gradient) / std::numbers::pi };
+	
 	if (p1.x - p0.x < 0) {
 		uncorrected += 180;
+	} else if ( p1.y - p0.y < 0) {
+		uncorrected += 360;
 	}
-	return std::fmod(uncorrected, 360);
+	return uncorrected;
 }
 
 double get_distance(Point p0, Point p1) {
@@ -38,8 +45,17 @@ Point to_cartesian(double r, double theta) {
 
 template <typename N>
 double closest(N val, const std::vector<N>& arr) {
-	double lower { *std::ranges::lower_bound(arr, val) };
-	double upper { *std::ranges::upper_bound(arr, val) };
+	double lower { *(std::ranges::lower_bound(arr, val) - 1) }; // yes the naming is fucked
+	auto upper_it { std::ranges::lower_bound(arr, val) };
+	
+	double upper;
+	if (upper_it == std::ranges::end(arr)) {
+		upper = arr[0]; // wrap
+	} else {
+		upper = *upper_it;
+	}
+	
+	std::cout << lower << " " << upper << std::endl;
 		
 	return val - lower < upper - val ? lower: upper;
 }
@@ -79,7 +95,9 @@ Point get_routing_point(Point fixed0, Point fixed1, Point guide) {
 
 
 Point snap_to_angle(Point fixed, Point guide) {
+	std::cout << get_angle(fixed, guide) << std::endl;
 	double angle { closest(get_angle(fixed, guide) , {0, 45, 90, 135, 180, 225, 270, 315}) };
+	std::cout << angle << std::endl;
 	double radius { get_distance(fixed, guide) };
 	Point relative { to_cartesian(radius, angle / 180 * std::numbers::pi) };
 	return { fixed.x + relative.x, fixed.y + relative.y };

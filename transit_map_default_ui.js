@@ -7,6 +7,7 @@ function updateRoutingPointLabel(routingPoint) {
 class Handler {
 	constructor(map) {
 		this.map = map;
+		this.shownRoutingPoints = [];
 	}
 	
 	async onDragRoutingPoint(x, y, routingPoint, updateAsDrag = false) {
@@ -21,14 +22,13 @@ class Handler {
 	showRoutingPoint(routingPoint) {
 		routingPoint.el.style.opacity = 1;
 		routingPoint.label.style.visibility = "visible";
-		this.shownRoutingPoint = routingPoint;
+		this.shownRoutingPoints.push(routingPoint);
 	}
 	
-	hideRoutingPoint() {
-		if (this.shownRoutingPoint) {
-			this.shownRoutingPoint.el.style.opacity = 0;
-			this.shownRoutingPoint.label.style.visibility = "hidden";
-			this.shownRoutingPoint = null;
+	hideRoutingPoints() {
+		for (let rp of this.shownRoutingPoints) {
+			rp.el.style.opacity = 0;
+			rp.label.style.visibility = "hidden";
 		}
 	}
 	
@@ -84,6 +84,8 @@ class Handler {
 							)
 							updateRoutingPointLabel(routingPoint);
 							this.showRoutingPoint(routingPoint);
+							const neighbours = this.map.drawer.getRoutingPointNeighbours(routingPoint);
+							neighbours.map((p) => { if (p.routing) this.showRoutingPoint(p) });
 							return routingPoint;
 						}
 					);
@@ -93,8 +95,11 @@ class Handler {
 					this.rerouting = true;
 					const routingPoint = this.map.drawer.getRoutingPointFromEl(target);
 					this.showRoutingPoint(routingPoint);
-					const updateAsDrag = this.map.drawer.countAutomaticNeighbours(routingPoint) > 0;
-					console.log(updateAsDrag);
+					
+					const neighbours = this.map.drawer.getRoutingPointNeighbours(routingPoint);
+					neighbours.map((p) => { if (p.routing) this.showRoutingPoint(p) });
+					const updateAsDrag = neighbours.filter((p) => p.type == this.map.drawer.AUTOMATIC).length > 0;
+					
 					const moved = await dragging(
 						((x, y) => this.onDragRoutingPoint(x, y, routingPoint, updateAsDrag)).bind(this),
 						this.map.screenToMapCoords.bind(this.map),
@@ -128,7 +133,7 @@ class Handler {
 				if (this.waitOneLoopBeforeHidingRoutingPoint) {
 					this.waitOneLoopBeforeHidingRoutingPoint = false;
 				} else if (!this.rerouting && data.type != "routing-point") {
-					this.hideRoutingPoint();
+					this.hideRoutingPoints();
 				}
 				break;
 		}

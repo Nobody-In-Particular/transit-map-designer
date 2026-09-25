@@ -387,10 +387,7 @@ class TransitMapDrawer {
 			this.getPointOnLineSection(routingPoint.lineSection, routingPoint.index + 2) // + 1, + 1
 		];
 	}
-	
-	countAutomaticNeighbours(routingPoint) {
-		return this.getRoutingPointNeighbours(routingPoint).filter((p) => p.type == this.AUTOMATIC).length;
-	}
+
 	
 	correctRoutingPoint(routingPoint) {
 		if (routingPoint.type == this.AUTOMATIC) {
