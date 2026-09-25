@@ -1,6 +1,8 @@
 import { addSVGElement, editSVGElement, HTML_URL, calcPerpendicularTranslation, getSVGCoords, transformCoords, dragging } from './svg_utils/index.js';
 import "./routing_wasm.js";
 
+const RoutingWASM = Module;
+
 
 function getOrReturnObj(val, arr) {
 	if (typeof val == "number" || !isNaN(parseInt(val))) {
@@ -386,14 +388,38 @@ class TransitMapDrawer {
 		];
 	}
 	
+	countAutomaticNeighbours(routingPoint) {
+		return this.getRoutingPointNeighbours(routingPoint).filter((p) => p.type == this.AUTOMATIC).length;
+	}
+	
 	correctRoutingPoint(routingPoint) {
 		if (routingPoint.type == this.AUTOMATIC) {
-			const [neighbour0, neighbour1] = this.getRoutingPointNeighbours(routingPoint);
-			console.log({x: neighbour0.x, y: neighbour0.y}, {x: neighbour1.x, y: neighbour1.y});
-			const {x, y} = Module.get_routing_point(neighbour0, neighbour1, routingPoint);
-			console.log(x, y);
-			routingPoint.x = x;
-			routingPoint.y = y;
+			const neighbours = this.getRoutingPointNeighbours(routingPoint);
+			const automaticNeighbours = neighbours.filter((p) => p.type == this.AUTOMATIC);
+			
+			if (automaticNeighbours.length == 0) {
+				const {x, y} = RoutingWASM.get_routing_point(neighbours[0], neighbours[1], routingPoint);
+				routingPoint.x = x;
+				routingPoint.y = y;
+			} else if (automaticNeighbours.length == 1) {
+				const corrector = automaticNeighbours[0];
+				const correctorSideFixed = this.getPointOnLineSection(
+					routingPoint.lineSection, 
+					2*corrector.index - routingPoint.index + 1 // 1 in the opposite direction
+				);
+				const guideSideFixed = this.getPointOnLineSection(
+					routingPoint.lineSection,
+					2*routingPoint.index - corrector.index + 1 // 1 in the oppsite direction
+				);
+				const [
+					{x: xGuide, y: yGuide},
+					{x: xCorrector, y: yCorrector}
+				] = RoutingWASM.get_routing_points_half_fixed(guideSideFixed, correctorSideFixed, routingPoint, corrector);
+				routingPoint.x = xGuide;
+				routingPoint.y = yGuide;
+				corrector.x = xCorrector;
+				corrector.y = yCorrector;
+			}
 		}
 	}
 	

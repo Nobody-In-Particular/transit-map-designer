@@ -93,9 +93,10 @@ class Handler {
 					this.rerouting = true;
 					const routingPoint = this.map.drawer.getRoutingPointFromEl(target);
 					this.showRoutingPoint(routingPoint);
-					//const updateAsDrag = this.map.drawer.getRoutingPointNeighbours(routingPoint).filter((p) => p.type == this.map.drawer.AUTOMATIC).length > 0;
+					const updateAsDrag = this.map.drawer.countAutomaticNeighbours(routingPoint) > 0;
+					console.log(updateAsDrag);
 					const moved = await dragging(
-						((x, y) => this.onDragRoutingPoint(x, y, routingPoint)).bind(this),
+						((x, y) => this.onDragRoutingPoint(x, y, routingPoint, updateAsDrag)).bind(this),
 						this.map.screenToMapCoords.bind(this.map),
 					)
 					

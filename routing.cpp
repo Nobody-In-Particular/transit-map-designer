@@ -81,12 +81,12 @@ Point get_routing_point(Point fixed0, Point fixed1, Point guide) {
 Point snap_to_angle(Point fixed, Point guide) {
 	double angle { closest(get_angle(fixed, guide) , {0, 45, 90, 135, 180, 225, 270, 315}) };
 	double radius { get_distance(fixed, guide) };
-	return to_cartesian(radius, angle);
+	Point relative { to_cartesian(radius, angle / 180 * std::numbers::pi) };
+	return { fixed.x + relative.x, fixed.y + relative.y };
 }
 
 std::array<Point, 2> get_routing_points_half_fixed(
 	Point fixed_guide, Point fixed_corrector, Point guide, Point corrector
-	// fixed_x is the fixed point on the x side
 ){
 	Point snapped { snap_to_angle(fixed_guide, guide) };
 	return {
@@ -94,20 +94,44 @@ std::array<Point, 2> get_routing_points_half_fixed(
 	};
 }
 
-std::vector<Point> get_multiple_routing_points(const std::vector<std::array<Point, 3>>& args) {
-	std::vector<Point> result;
-	result.reserve(args.size());
-	for (std::array<Point, 3> spec : args) {
-		result.push_back(get_routing_point(spec[0], spec[1], spec[2]));
+std::vector<Point> get_many_routing_points(std::vector<Point> fixed0, std::vector<Point> fixed1, std::vector<Point> guide) {
+	std::vector<Point> result {};
+	result.reserve(fixed0.size());
+	for (int i { 0 };i < fixed0.size(); ++i) {
+		result.push_back(get_routing_point(fixed0[i], fixed1[i], guide[i]));
 	}
 	return result;
 }
+
+std::vector<std::vector<Point>> get_blank_vectors(std::vector<Point>::size_type size, std::vector<Point>::size_type n) {
+	std::vector<std::vector<Point>> result {};
+	result.reserve(n);
+	for (int i { 0 };i < n;++i) {
+		std::vector<Point> vec {};
+		vec.reserve(size);
+		result.push_back(vec);
+	}
+	return result;
+}
+
 
 EMSCRIPTEN_BINDINGS(routing) {
 	emscripten::value_object<Point>("Point")
 		.field("x", &Point::x)
 		.field("y", &Point::y)
 		;
+	
+	emscripten::value_array<std::array<Point, 2>>("std::array<Point, 2>")
+		.element(emscripten::index<0>())
+		.element(emscripten::index<1>())
+		;
+	
+	emscripten::register_vector<Point>("std::vector<Point>");
+	emscripten::register_vector<std::vector<Point>>("std::vector<std::vector<Point>>");
+	
+	emscripten::function("get_blank_vectors", &get_blank_vectors);
+	emscripten::function("get_many_routing_points", &get_many_routing_points);
+	emscripten::function("get_routing_points_half_fixed", &get_routing_points_half_fixed);
 	emscripten::function("snap_to_angle", &snap_to_angle);
 	emscripten::function("get_routing_point", &get_routing_point);
 }
