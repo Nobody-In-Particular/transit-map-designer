@@ -431,6 +431,10 @@ class TransitMapDrawer {
 		return this.mapSpec.lineSections[el.dataset.lineSectionId].routingPoints[el.dataset.index];
 	}
 	
+	getStopFromEl(el) {
+		return this.mapSpec.stops[el.dataset.stopId];
+	}
+	
 	getLabelFromEl(el) {
 		if (el.dataset.type == "stop") {
 			return this.mapSpecs.stops[el.dataset.stopId].label;

@@ -101,7 +101,25 @@ class Handler {
 				break;
 			case "pointerdown":
 				event.preventDefault();
-				if (this.affectedRectangle && this.affectedRectangle.contains(x, y)) { // you can't select anything else inside your rectangle
+				 if (data.type == "stop") {
+					const stop = this.drawer.getStopFromEl(target);
+					
+					if (this.affectedRectangle && this.affectedRectangle.contains(x, y)) {
+						this.map.initWarp(
+							this.affectedRectangle.bbox,
+							{x: stop.x, y: stop.y, width: 0, height: 0}
+						)
+						
+						await dragging(
+							((x, y) => this.map.onDrag({x, y, width: 0, height: 0})).bind(this),
+							this.map.screenToMapCoords.bind(this.map)
+						)
+					} else {
+						this.removeAffectedRectangle();
+						// make bigger rectangle and do stuff with it
+					}
+				
+				} else if (this.affectedRectangle && this.affectedRectangle.contains(x, y)) { // other than a stop (above), nothing else can be dragged in an affectedRectangle
 							
 					this.removeMovableRectangle();
 					
@@ -116,7 +134,7 @@ class Handler {
 						this.movableRectangle.flippable = false;
 						
 						this.movableRectangle.allowResizeAndDrag(
-							(() => this.map.onMove(this.movableRectangle.bbox)).bind(this),
+							(() => this.map.onDrag(this.movableRectangle.bbox)).bind(this),
 							"#resizer"
 						);
 						
@@ -168,9 +186,6 @@ class Handler {
 					this.waitOneLoopBeforeHidingRoutingPoint = true; 
 					
 					this.rerouting = false;
-				} else if (data.type == "stop") {
-					if (this.map.affectedRectangle) {
-					}
 				} else {
 					this.removeAffectedRectangle();
 					this.removeMovableRectangle();

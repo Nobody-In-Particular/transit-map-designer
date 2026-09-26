@@ -49,9 +49,6 @@ class TransitMap {
 			)
 		}
 		
-		this.affectedBbox = null;
-		this.movableBbox = null;
-
 		this.pz = new PanZoomListener(this.svgElement, this.panzoom.bind(this));
 	}
 	
@@ -111,7 +108,7 @@ class TransitMap {
 		)
 	}
 	
-	onMove(movableBbox) {
+	onDrag(movableBbox) {
 		this.warper.setDestBox(movableBbox);
 		this.warper.warpOnCanvas();
 		

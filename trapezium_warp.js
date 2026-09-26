@@ -186,14 +186,25 @@ class WarpingCoordinateMap {
 					} else {
 						k1 = pt.y / this.fromFrame.y0;
 					}
-					k0 = (pt.x - k1*this.fromFrame.x0) / (k1*this.fromFrame.w + (1-k1)*this.width)
+					const fullLength = k1 * this.fromFrame.w + (1-k1)*this.width;
+					if (fullLength) {
+						k0 = (pt.x - k1*this.fromFrame.x0) / fullLength;
+					} else {
+						k0 = 0;
+					}
+					
 				} else {
 					if (side) {
 						k1 = (this.width - pt.x) / (this.width - this.fromFrame.x1);
 					} else {
 						k1 = pt.x / this.fromFrame.x0;
 					}
-					k0 = (pt.y - k1*this.fromFrame.y0) / (k1*this.fromFrame.h + (1-k1)*this.height)
+					const fullLength = (k1*this.fromFrame.h + (1-k1)*this.height);
+					if (fullLength) {
+						k0 = (pt.y - k1*this.fromFrame.y0) / fullLength;
+					} else {
+						k0 = 0;
+					}
 				}
 				if (k0 < 0 && k0 > -Number.EPSILON) {
 					k0 = 0;
@@ -201,12 +212,13 @@ class WarpingCoordinateMap {
 				if (k1 < 0 && k1 > -Number.EPSILON) {
 					k1 = 0;
 				}
+				
 				this.warpData.set(pt, {k0, k1, orientation, side});
 			}
 		}
 	}
 	
-	warpPoint({x, y}, toBox) {	
+	warpPoint({x, y}, toBox) {
 		if (x == this.width || y == this.height) {
 			return {newX: x, newY: y};
 		}
@@ -232,6 +244,7 @@ class WarpingCoordinateMap {
 			}
 			newY = k1*toBox.y + k0*(k1*toBox.height + (1-k1)*this.height);
 		}
+		
 		return {newX, newY};
 	}
 
@@ -280,16 +293,18 @@ class WarpingCoordinateMap {
 			toBox.width, toBox.height
 		);
 		
-		ctx.drawImage(
-			centralImage,
-			toBox.x + ox, toBox.y + oy,
-			toBox.width, toBox.height
-		);
+		if (centralImage) {
+			ctx.drawImage(
+				centralImage,
+				toBox.x + ox, toBox.y + oy,
+				toBox.width, toBox.height
+			);
+		}
 	}
 }
 
 class TrapeziumWarper {
-	constructor(outerBox, fromBox, ctx, changeCanvasBbox = null, canvasOrigin = {x: 0, y: 0}) {
+	constructor(outerBox, fromBox, ctx, changeCanvasBbox = null, canvasOrigin = {x: 0, y: 0}) {		
 		this.canvasOrigin = {...canvasOrigin};
 		
 		this.ox = outerBox.x;
@@ -301,13 +316,18 @@ class TrapeziumWarper {
 		const realCanvasOy = this.oy + this.canvasOrigin.y;
 		
 		this.origImageData = ctx.getImageData(realCanvasOx, realCanvasOy, outerBox.width, outerBox.height);
-		createImageBitmap(
-			ctx.canvas,
-			fromBox.x + this.canvasOrigin.x, fromBox.y + this.canvasOrigin.y,
-			fromBox.width, fromBox.height
-		).then(
-			((bitmap) => this.centralImage = bitmap).bind(this)
-		)
+		
+		if (fromBox.width != 0 && fromBox.height != 0) {
+			createImageBitmap(
+				ctx.canvas,
+				fromBox.x + this.canvasOrigin.x, fromBox.y + this.canvasOrigin.y,
+				fromBox.width, fromBox.height
+			).then(
+				((bitmap) => this.centralImage = bitmap).bind(this)
+			)
+		} else {
+			this.centralImage = null;
+		}
 		
 		var newCanvasOrigin = {};		
 		if (changeCanvasBbox) {
@@ -349,6 +369,7 @@ class TrapeziumWarper {
 		);
 		return {newX: newX + this.ox, newY: newY + this.oy};
 	}
+	
 	warpOnCanvas() {
 		this.coordinateMap.warpImageOnCanvas(
 			this.origImageData,
