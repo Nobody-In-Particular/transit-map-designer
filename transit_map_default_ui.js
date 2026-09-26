@@ -1,5 +1,6 @@
 import { dragging } from "./svg_utils/index.js";
 import { pointTypes } from "./transit_map_draw.js";
+import Rectangle from "./rectangle/index.js";
 
 function updateRoutingPointLabel(routingPoint) {
 	routingPoint.label.textContent = `routing point #${routingPoint.index + 1} (${routingPoint.typeString})`;
@@ -8,6 +9,7 @@ function updateRoutingPointLabel(routingPoint) {
 class Handler {
 	constructor(map) {
 		this.map = map;
+		this.drawer = map.drawer;
 		this.shownRoutingPoints = [];
 	}
 	
@@ -17,12 +19,12 @@ class Handler {
 		if (updateAsDrag) {
 			routingPoint.correctPositionOrNeighbours();
 		}
-		this.map.drawer.drawRoutingPoint(routingPoint);
+		this.drawer.drawRoutingPoint(routingPoint);
 	}
 	
 	initDragRoutingPoint(routingPoint) {
 		this.rerouting = true;
-		this.map.drawer.showAllServicesAndHideLabels();
+		this.drawer.showAllServicesAndHideLabels();
 		this.showRoutingPoint(routingPoint);
 		
 		const neighbours = routingPoint.neighbours;
@@ -48,16 +50,30 @@ class Handler {
 		}
 	}
 	
+	removeAffectedRectangle() {
+		if (this.affectedRectangle) {
+			this.affectedRectangle.remove();
+			this.affectedRectangle = null;
+		}
+	}
+	
+	removeMovableRectangle() {
+		if (this.movableRectangle) {
+			this.movableRectangle.remove();
+			this.movableRectangle = null;
+		}
+	}
+	
 	async handle(x, y, type, target) {
 		const data = target.dataset;			
 		switch (type) {
 			case "click":
 				if (!this.rerouting) {
 					if (data.type == "line") {
-						this.map.drawer.highlightService(data.serviceId, x, y);			
+						this.drawer.highlightService(data.serviceId, x, y);			
 						this.persistentService = data.serviceId;
 					} else if (this.persistentService) {
-						this.map.drawer.showAllServicesAndHideLabels();
+						this.drawer.showAllServicesAndHideLabels();
 						this.persistentService = null;
 					}
 				}
@@ -65,11 +81,11 @@ class Handler {
 			case "mouseover":
 				if (!this.rerouting) {
 					if (data.type == "line") {
-						this.map.drawer.highlightService(data.serviceId, x, y);
+						this.drawer.highlightService(data.serviceId, x, y);
 					} else if (data.type == "stop") {
-						this.map.drawer.showStopLabel(data.stopId);
+						this.drawer.showStopLabel(data.stopId);
 					} else if (data.type == "routing-point") {
-						const routingPoint = this.map.drawer.getRoutingPointFromEl(target);
+						const routingPoint = this.drawer.getRoutingPointFromEl(target);
 						this.showRoutingPoint(routingPoint);
 					}
 				}
@@ -77,22 +93,47 @@ class Handler {
 			case "mouseout":
 				if (!this.rerouting) {
 					if (data.type == "line" && data.serviceId != this.persistentService) {
-						this.map.drawer.showAllServicesAndHideLabels();
+						this.drawer.showAllServicesAndHideLabels();
 					} else if (data.type == "stop" ) {
-						this.map.drawer.hideStopLabel(data.stopId);
+						this.drawer.hideStopLabel(data.stopId);
 					}
 				}
 				break;
 			case "pointerdown":
 				event.preventDefault();
-				if (data.type == "line") {
+				if (this.affectedRectangle && this.affectedRectangle.contains(x, y)) { // you can't select anything else inside your rectangle
+							
+					this.removeMovableRectangle();
+					
+					this.movableRectangle = await Rectangle.selectArea(
+						this.drawer.containerElement,
+						x, y,
+						{fill: "none", stroke: "black", "stroke-width": 2},
+						{...this.affectedRectangle.asBounds(), coordTransformMatrix: this.map.pz.matrix}
+					);
+					if (this.movableRectangle) {
+						this.movableRectangle.resetFlip();
+						this.movableRectangle.flippable = false;
+						
+						this.movableRectangle.allowResizeAndDrag(
+							(() => this.map.onMove(this.movableRectangle.bbox)).bind(this),
+							"#resizer"
+						);
+						
+						this.map.initWarp(
+							this.affectedRectangle.bbox,
+							this.movableRectangle.bbox
+						);
+					}
+		
+				} else if (data.type == "line") {
 					
 					await dragging(
 						this.onDragRoutingPoint.bind(this),
 						this.map.screenToMapCoords.bind(this.map),
 						() => {
 							this.rerouting = true;
-							const routingPoint = this.map.drawer.createRoutingPoint(
+							const routingPoint = this.drawer.createRoutingPoint(
 								data.lineSectionId,
 								data.segmentNumber,
 								0, 0,
@@ -107,7 +148,7 @@ class Handler {
 				
 				} else if (data.type == "routing-point") {
 					this.rerouting = true;
-					const routingPoint = this.map.drawer.getRoutingPointFromEl(target);
+					const routingPoint = this.drawer.getRoutingPointFromEl(target);
 					const updateAsDrag = this.initDragRoutingPoint(routingPoint);	
 					
 					const moved = await dragging(
@@ -121,24 +162,29 @@ class Handler {
 					}
 					
 					routingPoint.correctPositionOrNeighbours();
-					this.map.drawer.drawRoutingPoint(routingPoint);
+					this.drawer.drawRoutingPoint(routingPoint);
 					
 					// for some reason a pointermove event sometimes fires after it has snapped back
 					this.waitOneLoopBeforeHidingRoutingPoint = true; 
 					
 					this.rerouting = false;
-					
-				} else {
-					if (this.map.affectedArea && this.map.affectedArea.contains(x, y)) {
-						this.map.removeMovableArea();
-						await this.map.selectMovableArea(x, y)
-					} else {
-						this.map.removeAffectedArea();
-						this.map.removeMovableArea();
-						await this.map.selectAffectedArea(x, y);
+				} else if (data.type == "stop") {
+					if (this.map.affectedRectangle) {
 					}
+				} else {
+					this.removeAffectedRectangle();
+					this.removeMovableRectangle();
+					
+					this.affectedRectangle = await Rectangle.selectArea(
+						this.drawer.containerElement,
+						x, y,
+						{fill: "none", stroke: "black", "stroke-width": 2, "stroke-dasharray": 4},
+						{coordTransformMatrix: this.map.pz.matrix}
+					);
 				}
+				
 				break;
+			
 			case "pointermove":
 				if (this.waitOneLoopBeforeHidingRoutingPoint) {
 					this.waitOneLoopBeforeHidingRoutingPoint = false;
@@ -146,6 +192,16 @@ class Handler {
 					this.hideRoutingPoints();
 				}
 				break;
+		}
+	}
+	panzoom(matrix) {
+		if (this.affectedRectangle) {
+			this.affectedRectangle.coordTransformMatrix = matrix;
+			this.affectedRectangle.draw();
+		}
+		if (this.movableRectangle) {
+			this.movableRectangle.coordTransformMatrix = matrix;
+			this.movableRectangle.draw();
 		}
 	}
 }
