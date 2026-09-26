@@ -1,20 +1,24 @@
 import { randomColour } from "./svg_utils/index.js";
+import { Stop } from "./transit_map_draw.js";
 
 class LineSection {
 	constructor({id, ends, services = [], routingPoints = [], lineSegments = []} = {}) {
 		Object.assign(this, {id, ends, services, routingPoints, lineSegments});
+	}
+	getPointAt(index) {
+		if (index == 0) {
+			return this.ends[0];
+		} else if (index == this.routingPoints.length + 1) {
+			return this.ends[1];
+		} else {
+			return this.routingPoints[index - 1];
+		}
 	}
 }
 
 class Service {
 	constructor({id, name, colour, stops = [], lineParts = [], group = null} = {}) {
 		Object.assign(this, {id, name, colour, stops, lineParts, group});
-	}
-}
-
-class Stop {
-	constructor({id, name, oldId, x, y, lineSections = [], el = null} = {}) {
-		Object.assign(this, {id, name, oldId, x, y, lineSections, el});
 	}
 }
 

@@ -45,19 +45,16 @@ Point to_cartesian(double r, double theta) {
 
 template <typename N>
 double closest(N val, const std::vector<N>& arr) {
-	double lower { *(std::ranges::lower_bound(arr, val) - 1) }; // yes the naming is fucked
-	auto upper_it { std::ranges::lower_bound(arr, val) };
-	
-	double upper;
-	if (upper_it == std::ranges::end(arr)) {
-		upper = arr[0]; // wrap
+	if (val >= arr[arr.size() - 1]) {
+		return arr[arr.size() - 1];
+	} else if (val <= arr[0]) {
+		return arr[0];
 	} else {
-		upper = *upper_it;
+		auto first_ge_it { std::ranges::lower_bound(arr, val) };
+		N last_lt { *(first_ge_it - 1) };
+		N first_ge { *first_ge_it };
+		return val - last_lt < first_ge - val ? last_lt : first_ge;
 	}
-	
-	std::cout << lower << " " << upper << std::endl;
-		
-	return val - lower < upper - val ? lower: upper;
 }
 
 Point get_routing_point(Point fixed0, Point fixed1, Point guide) {
@@ -95,9 +92,10 @@ Point get_routing_point(Point fixed0, Point fixed1, Point guide) {
 
 
 Point snap_to_angle(Point fixed, Point guide) {
-	std::cout << get_angle(fixed, guide) << std::endl;
-	double angle { closest(get_angle(fixed, guide) , {0, 45, 90, 135, 180, 225, 270, 315}) };
-	std::cout << angle << std::endl;
+	
+	// 360 needed to catch angles closer to 360 than 315;
+	double angle { closest<double>(get_angle(fixed, guide) , {0, 45, 90, 135, 180, 225, 270, 315, 360}) };
+	
 	double radius { get_distance(fixed, guide) };
 	Point relative { to_cartesian(radius, angle / 180 * std::numbers::pi) };
 	return { fixed.x + relative.x, fixed.y + relative.y };
@@ -112,6 +110,7 @@ std::array<Point, 2> get_routing_points_half_fixed(
 	};
 }
 
+/*
 std::vector<Point> get_many_routing_points(std::vector<Point> fixed0, std::vector<Point> fixed1, std::vector<Point> guide) {
 	std::vector<Point> result {};
 	result.reserve(fixed0.size());
@@ -120,6 +119,7 @@ std::vector<Point> get_many_routing_points(std::vector<Point> fixed0, std::vecto
 	}
 	return result;
 }
+
 
 std::vector<std::vector<Point>> get_blank_vectors(std::vector<Point>::size_type size, std::vector<Point>::size_type n) {
 	std::vector<std::vector<Point>> result {};
@@ -131,6 +131,9 @@ std::vector<std::vector<Point>> get_blank_vectors(std::vector<Point>::size_type 
 	}
 	return result;
 }
+*/
+
+
 
 
 EMSCRIPTEN_BINDINGS(routing) {
@@ -144,11 +147,14 @@ EMSCRIPTEN_BINDINGS(routing) {
 		.element(emscripten::index<1>())
 		;
 	
+	/*
 	emscripten::register_vector<Point>("std::vector<Point>");
 	emscripten::register_vector<std::vector<Point>>("std::vector<std::vector<Point>>");
 	
 	emscripten::function("get_blank_vectors", &get_blank_vectors);
 	emscripten::function("get_many_routing_points", &get_many_routing_points);
+	*/
+	
 	emscripten::function("get_routing_points_half_fixed", &get_routing_points_half_fixed);
 	emscripten::function("snap_to_angle", &snap_to_angle);
 	emscripten::function("get_routing_point", &get_routing_point);

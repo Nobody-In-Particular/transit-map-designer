@@ -3,6 +3,12 @@ import "./routing_wasm.js";
 
 const RoutingWASM = Module;
 
+const pointTypes = {
+	WARPING: 0,
+	FIXED: 1,
+	AUTOMATIC: 2
+}
+
 
 function getOrReturnObj(val, arr) {
 	if (typeof val == "number" || !isNaN(parseInt(val))) {
@@ -11,7 +17,6 @@ function getOrReturnObj(val, arr) {
 		return val;
 	}
 }
-
 
 class TransitMapBackground {
 	constructor(containerElement, imageBitmap) {
@@ -61,11 +66,101 @@ class TransitMapBackground {
 	}
 }
 
-class TransitMapDrawer {
-	WARPING = 0;
-	FIXED = 1;
-	AUTOMATIC = 2;
+class RoutingPoint {
+	routing = true;
+	
+	constructor({x, y, type, lineSection, index}) {
+		Object.assign(this, {x, y, type, lineSection, index});
+	}
+	
+	get typeString() {
+		return ["warping", "fixed", "automatic"][this.type]
+	}
+
+	get neighbours() {
+		return new Neighbours(
+			this.lineSection.getPointAt(this.index), // -1 for before, +1 for end-correction
+			this.lineSection.getPointAt(this.index + 2) // + 1 for after, + 1 for end-correction
+		)
+	}
+	
+	repositionToNeighbours() {
+		if (this.type == pointTypes.AUTOMATIC) {
+			const {x, y} = RoutingWASM.get_routing_point(...this.neighbours, this);
+			this.x = x;
+			this.y = y;
+		}
+	}
+	
+	correctPositionOrNeighbours() {
+		const neighbours = this.neighbours;
+		const automaticNeighbours = neighbours.getAutomatic();
 		
+		if (this.type == pointTypes.AUTOMATIC && automaticNeighbours.length < 2) {
+			if (automaticNeighbours.length == 0) {
+				this.repositionToNeighbours();
+			} else {
+				const corrector = automaticNeighbours[0];
+				const correctorSideFixed = corrector.neighbours.not(this);
+				const thisSideFixed = neighbours.not(corrector);
+				const [
+					{x: xThis, y: yThis},
+					{x: xCorrector, y: yCorrector}
+				] = RoutingWASM.get_routing_points_half_fixed(thisSideFixed, correctorSideFixed, this, corrector);
+				this.x = xThis;
+				this.y = yThis;
+				corrector.x = xCorrector;
+				corrector.y = yCorrector;
+			}
+		} else {
+			for (let rp of this.neighbours.getAutomatic()) {
+				rp.repositionToNeighbours();
+			}
+		}
+	}
+}
+
+class Neighbours extends Array {
+	getAutomatic() {
+		return this.filter((rp) => rp.type == pointTypes.AUTOMATIC);
+	}
+	not(routingPoint) {
+		if (this[0] == routingPoint) {
+			return this[1];
+		} else {
+			return this[0];
+		}
+	}
+}
+
+class Stop {
+	routing = false;
+	type = pointTypes.WARPING;
+	
+	constructor({id, name, oldId, x, y} = {}) {
+		Object.assign(this, {id, name, oldId, x, y});
+		this.lineSections = [];
+	}
+	
+	getAutomaticNeighbours() {
+		const automaticNeighbours = [];
+		for (let lineSection of this.lineSections) {
+			if (lineSection.routingPoints.length > 0) {
+				const neighbourRoutingPoint =
+					this == lineSection.ends[0] ?
+					lineSection.routingPoints[0] :
+					lineSection.routingPoints[lineSection.routingPoints.length - 1]
+				if (neighbourRoutingPoint.type == pointTypes.AUTOMATIC) {
+					automaticNeighbours.push(neighbourRoutingPoint);
+				}
+			}
+		}
+		return automaticNeighbours;
+	}
+}
+
+
+class TransitMapDrawer {
 	constructor(
 		spec, containerElement,
 		{
@@ -296,20 +391,24 @@ class TransitMapDrawer {
 		}
 	}
 		
-	reIndexRoutingPoints(lineSection) {
+	reIndexSegments(lineSection) {
 		for (let [newIndex, point] of Object.entries(lineSection.routingPoints)) {
 			point.index = parseInt(newIndex);
 			point.el.dataset.index = newIndex;
+		}
+		for (let [newIndex, segment] of Object.entries(lineSection.lineSegments)) {
+			for (let el of segment.els) {
+				el.dataset.segmentNumber = newIndex;
+			}
 		}
 	}
 	
 	createRoutingPoint(lineSection, index, x, y, type) {
 		lineSection = this.#getLineSection(lineSection);
 
-		const routingPoint = {
+		const routingPoint = new RoutingPoint({
 			x, y, type, lineSection, index: parseInt(index),
-			routing: true,
-		};
+		});
 		
 		const el = addSVGElement(this.stopLayer, "use", {href: "#" + this.options.routingPointElementId, "class": "routing-point graphic"});
 		const label = addSVGElement(this.labelLayer, "text", {"class": "routing-point label"});
@@ -322,7 +421,7 @@ class TransitMapDrawer {
 		routingPoint.label = label;
 		
 		lineSection.routingPoints.splice(index, 0, routingPoint);
-		this.reIndexRoutingPoints(lineSection);
+		this.reIndexSegments(lineSection);
 		
 		this.#createLineSegments(lineSection);
 		return routingPoint;
@@ -370,74 +469,27 @@ class TransitMapDrawer {
 			}
 		}
 	}
-	
-	getPointOnLineSection(lineSection, index) {
-		if (index == 0) {
-			return lineSection.ends[0];
-		} else if (index == lineSection.routingPoints.length + 1) {
-			return lineSection.ends[1];
-		} else {
-			return lineSection.routingPoints[index - 1];
-		}
-	}
-	
-	getRoutingPointNeighbours(routingPoint) {
-		return [
-			this.getPointOnLineSection(routingPoint.lineSection, routingPoint.index), // + 1 to get index on line section, -1 to get before
-			this.getPointOnLineSection(routingPoint.lineSection, routingPoint.index + 2) // + 1, + 1
-		];
-	}
 
-	
-	correctRoutingPoint(routingPoint) {
-		if (routingPoint.type == this.AUTOMATIC) {
-			const neighbours = this.getRoutingPointNeighbours(routingPoint);
-			const automaticNeighbours = neighbours.filter((p) => p.type == this.AUTOMATIC);
-			
-			if (automaticNeighbours.length == 0) {
-				const {x, y} = RoutingWASM.get_routing_point(neighbours[0], neighbours[1], routingPoint);
-				routingPoint.x = x;
-				routingPoint.y = y;
-			} else if (automaticNeighbours.length == 1) {
-				const corrector = automaticNeighbours[0];
-				const correctorSideFixed = this.getPointOnLineSection(
-					routingPoint.lineSection, 
-					2*corrector.index - routingPoint.index + 1 // 1 in the opposite direction
-				);
-				const guideSideFixed = this.getPointOnLineSection(
-					routingPoint.lineSection,
-					2*routingPoint.index - corrector.index + 1 // 1 in the oppsite direction
-				);
-				const [
-					{x: xGuide, y: yGuide},
-					{x: xCorrector, y: yCorrector}
-				] = RoutingWASM.get_routing_points_half_fixed(guideSideFixed, correctorSideFixed, routingPoint, corrector);
-				routingPoint.x = xGuide;
-				routingPoint.y = yGuide;
-				corrector.x = xCorrector;
-				corrector.y = yCorrector;
-			}
-		}
-	}
-	
-	updateAutomaticRouting(lineSections = null) {
-	}
 
 	draw(points = null) {
+		
 		if (points == null) {
 			points = this.mapSpec.stops;
 		}
+		
 		const lineSectionsToDraw = new Set();
 		
 		for (let point of points) {
-			if (point.routing) {
-				lineSectionsToDraw.add(point.lineSection);
-			} else {
+			if (!point.routing) {
 				for (let lineSection of point.lineSections) {
 					lineSectionsToDraw.add(lineSection);
 				}
+				for (let rp of point.getAutomaticNeighbours()) {
+					rp.repositionToNeighbours();
+				}
 			}
 		}
+		
 		for (let lineSection of lineSectionsToDraw) {
 			this.drawLineSection(lineSection);
 		}
@@ -450,4 +502,4 @@ class TransitMapDrawer {
 	}
 }
 
-export { TransitMapBackground, TransitMapDrawer }
+export { TransitMapBackground, TransitMapDrawer, Stop, pointTypes }

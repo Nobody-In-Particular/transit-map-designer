@@ -1,7 +1,8 @@
 import { dragging } from "./svg_utils/index.js";
+import { pointTypes } from "./transit_map_draw.js";
 
 function updateRoutingPointLabel(routingPoint) {
-	routingPoint.label.textContent = ["Warping", "Fixed", "Automatic"][routingPoint.type] + " routing point";
+	routingPoint.label.textContent = `routing point #${routingPoint.index + 1} (${routingPoint.typeString})`;
 }
 
 class Handler {
@@ -10,15 +11,30 @@ class Handler {
 		this.shownRoutingPoints = [];
 	}
 	
-	async onDragRoutingPoint(x, y, routingPoint, updateAsDrag = false) {
-		routingPoint.x = Math.round(x);
-		routingPoint.y = Math.round(y);
+	onDragRoutingPoint(x, y, [routingPoint, updateAsDrag]) {
+		routingPoint.x = x;
+		routingPoint.y = y;
 		if (updateAsDrag) {
-			this.map.drawer.correctRoutingPoint(routingPoint);
+			routingPoint.correctPositionOrNeighbours();
 		}
 		this.map.drawer.drawRoutingPoint(routingPoint);
 	}
 	
+	initDragRoutingPoint(routingPoint) {
+		this.rerouting = true;
+		this.map.drawer.showAllServicesAndHideLabels();
+		this.showRoutingPoint(routingPoint);
+		
+		const neighbours = routingPoint.neighbours;
+		for (let p of neighbours) {
+			if (p.routing) {
+				this.showRoutingPoint(p);
+			}
+		}
+		
+		return false; // never update as drag
+	}
+
 	showRoutingPoint(routingPoint) {
 		routingPoint.el.style.opacity = 1;
 		routingPoint.label.style.visibility = "visible";
@@ -70,23 +86,21 @@ class Handler {
 			case "pointerdown":
 				event.preventDefault();
 				if (data.type == "line") {
+					
 					await dragging(
 						this.onDragRoutingPoint.bind(this),
 						this.map.screenToMapCoords.bind(this.map),
 						() => {
-							this.map.drawer.showAllServicesAndHideLabels();
 							this.rerouting = true;
 							const routingPoint = this.map.drawer.createRoutingPoint(
 								data.lineSectionId,
 								data.segmentNumber,
 								0, 0,
-								this.map.drawer.WARPING
+								pointTypes.WARPING								
 							)
 							updateRoutingPointLabel(routingPoint);
-							this.showRoutingPoint(routingPoint);
-							const neighbours = this.map.drawer.getRoutingPointNeighbours(routingPoint);
-							neighbours.map((p) => { if (p.routing) this.showRoutingPoint(p) });
-							return routingPoint;
+							const updateAsDrag = this.initDragRoutingPoint(routingPoint);
+							return [routingPoint, updateAsDrag];
 						}
 					);
 					this.rerouting = false;
@@ -94,14 +108,10 @@ class Handler {
 				} else if (data.type == "routing-point") {
 					this.rerouting = true;
 					const routingPoint = this.map.drawer.getRoutingPointFromEl(target);
-					this.showRoutingPoint(routingPoint);
-					
-					const neighbours = this.map.drawer.getRoutingPointNeighbours(routingPoint);
-					neighbours.map((p) => { if (p.routing) this.showRoutingPoint(p) });
-					const updateAsDrag = neighbours.filter((p) => p.type == this.map.drawer.AUTOMATIC).length > 0;
+					const updateAsDrag = this.initDragRoutingPoint(routingPoint);	
 					
 					const moved = await dragging(
-						((x, y) => this.onDragRoutingPoint(x, y, routingPoint, updateAsDrag)).bind(this),
+						((x, y) => this.onDragRoutingPoint(x, y, [routingPoint, updateAsDrag])).bind(this),
 						this.map.screenToMapCoords.bind(this.map),
 					)
 					
@@ -110,7 +120,7 @@ class Handler {
 						updateRoutingPointLabel(routingPoint);
 					}
 					
-					this.map.drawer.correctRoutingPoint(routingPoint);
+					routingPoint.correctPositionOrNeighbours();
 					this.map.drawer.drawRoutingPoint(routingPoint);
 					
 					// for some reason a pointermove event sometimes fires after it has snapped back

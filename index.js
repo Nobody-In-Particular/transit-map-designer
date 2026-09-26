@@ -1,7 +1,7 @@
 import { addSVGElement, randomColour, editSVGElement, getSVGCoords, transformCoords } from "./svg_utils/index.js";
 import Rectangle from "./rectangle/index.js";
 import { TrapeziumWarper } from "./trapezium_warp.js";
-import { TransitMapBackground, TransitMapDrawer } from "./transit_map_draw.js";
+import { TransitMapBackground, TransitMapDrawer, pointTypes } from "./transit_map_draw.js";
 import TransitMapSpec from "./transit_map_spec.js";
 import Handler from "./transit_map_default_ui.js";
 import { PanZoomListener } from "./panzoom_listener.js";
@@ -130,17 +130,17 @@ class TransitMap {
 	
 	#collectPointsInAffectedArea() {
 		this.affectedPoints = [];
-		for (let point of this.stops) {
-			if (this.affectedArea.contains(point.x, point.y)) {
+
+		for (let stop of this.stops) {
+			if (this.affectedArea.contains(stop.x, stop.y)) {
 				// NEEDS to put them here as we need the ORIGINAL x and y
-				this.affectedPoints.push({origX: point.x, origY: point.y, point});
+				this.affectedPoints.push({origX: stop.x, origY: stop.y, point: stop});
 			}
 		}
-		for (let lineSection of this.lineSections) {
-			for (let point of lineSection.routingPoints) {
-				if (point.type == this.drawer.WARPING && this.affectedArea.contains(point.x, point.y)) {
-					this.affectedPoints.push({origX: point.x, origY: point.y, point});
-				}
+		
+		for (let point of this.drawer.allRoutingPoints()) {
+			if (point.type == pointTypes.WARPING && this.affectedArea.contains(point.x, point.y)) {
+				this.affectedPoints.push({origX: point.x, origY: point.y, point});
 			}
 		}
 	}
