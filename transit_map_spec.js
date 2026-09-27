@@ -68,11 +68,11 @@ class TransitMapSpec {
 			let {stops} = service;
 			for (let i = 0; i < stops.length - 1; ++i) {
 				let ends = stops.slice(i, i + 2);
-				let endNames = ends.map(s => s.name);
-				if (endNames[0] > endNames[1]) {
-					endNames.reverse()
+				let endIds = ends.map(s => s.id);
+				if (endIds[0] > endIds[1]) {
+					endIds.reverse()
 				}
-				let lineKey = endNames.join(',');
+				let lineKey = endIds.join(',');
 				
 				if (!(lineKeys.has(lineKey))) { // if this line section not yet encountered
 					
