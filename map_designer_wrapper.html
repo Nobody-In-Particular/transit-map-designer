@@ -27,17 +27,20 @@ import {createTransitMap} from "/index.js";
 const drawArea = document.getElementById("map-area");
 
 
-const {stops, routes} = await (await fetch("/route_dump.json")).json();
-const {stopLocations, routeStops} = wrapper.simplifyStopsAndRoutes(stops, routes);
-
+const routes = await (await fetch("/route_dump.json")).json();
+const {stopLocations, routeStops} = wrapper.getStopsAndRoutesSimplified(routes, {
+	minLon: -1.61963,
+	maxLon: -1.49637,
+	minLat: 54.75286,
+	maxLat: 54.81058
+});
 
 /*
-const {stopLocations, routeStops} = await wrapper.fetchAndSimplifyStopsAndRoutes(-1.61963,
+const routes = await wrapper.fetchRoutes(-1.61963,
 	-1.49637,
 	54.75286,
 	54.81058
 )
-*/
 
 /*
 const {stops: stopLocations, services: routeStops} = await (await fetch("/durham_data_from_bustimes.json")).json();
