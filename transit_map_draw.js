@@ -118,6 +118,10 @@ class RoutingPoint {
 			}
 		}
 	}
+	
+	getAutomaticNeighbours() {
+		return this.neighbours.getAutomatic();
+	}
 }
 
 class Neighbours extends Array {
@@ -488,9 +492,11 @@ class TransitMapDrawer {
 				for (let lineSection of point.lineSections) {
 					lineSectionsToDraw.add(lineSection);
 				}
-				for (let rp of point.getAutomaticNeighbours()) {
-					rp.repositionToNeighbours();
-				}
+			} else {
+				lineSectionsToDraw.add(point.lineSection);
+			}
+			for (let rp of point.getAutomaticNeighbours()) {
+				rp.repositionToNeighbours();
 			}
 		}
 		
