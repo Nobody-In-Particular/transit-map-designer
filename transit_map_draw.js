@@ -40,24 +40,19 @@ class TransitMapBackground {
 		this.canvasWrapper.appendChild(this.canvas);
 	}
 	
-	changeBbox(deltaBbox) {
+	setBbox(newBbox) {
 		const tempImageData = this.ctx.getImageData(0, 0, this.bbox.width, this.bbox.height);
 		
-		const newBbox = {
-			x: this.bbox.x + deltaBbox.dx,
-			y: this.bbox.y + deltaBbox.dy,
-			width: deltaBbox.width,
-			height: deltaBbox.height
-		};
 		editSVGElement(this.canvasWrapper, newBbox);
+		
 		this.canvas.width = newBbox.width;
 		this.canvas.height = newBbox.height;
-		this.origin.x -= deltaBbox.dx;
-		this.origin.y -= deltaBbox.dy;
-		this.ctx.putImageData(tempImageData, -deltaBbox.dx, -deltaBbox.dy);
+		this.ctx.putImageData(tempImageData, this.origin.x - newBbox.x, this.origin.y - newBbox.y);
+		
+		this.origin.x = -newBbox.x;
+		this.origin.y = -newBbox.y;
 		
 		this.bbox = newBbox;
-		return {...this.origin};
 	}
 	
 	panzoom(matrix) {

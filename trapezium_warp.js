@@ -304,7 +304,7 @@ class WarpingCoordinateMap {
 }
 
 class TrapeziumWarper {
-	constructor(outerBox, fromBox, ctx, changeCanvasBbox = null, canvasOrigin = {x: 0, y: 0}) {		
+	constructor(outerBox, fromBox, ctx, setCanvasBbox = null, canvasOrigin = {x: 0, y: 0}) {		
 		this.canvasOrigin = {...canvasOrigin};
 		
 		this.ox = outerBox.x;
@@ -329,17 +329,17 @@ class TrapeziumWarper {
 			this.centralImage = null;
 		}
 		
-		var newCanvasOrigin = {};		
-		if (changeCanvasBbox) {
-			const deltaBbox = {
-				dx: Math.min(0, realCanvasOx),
-				dy: Math.min(0, realCanvasOy),
+		if (setCanvasBbox) {
+			const newBbox = {
+				x: Math.min(-canvasOrigin.x, this.ox),
+				y: Math.min(-canvasOrigin.y, this.oy),
 			};
-			deltaBbox.width = Math.max(this.width + realCanvasOx, ctx.canvas.width) - deltaBbox.dx,
-			deltaBbox.height = Math.max(this.height + realCanvasOy, ctx.canvas.height) - deltaBbox.dy;
+			newBbox.width = Math.max(this.width + this.ox, ctx.canvas.width) - newBbox.x,
+			newBbox.height = Math.max(this.height + this.oy, ctx.canvas.height) - newBbox.y;
 			
-			this.canvasOrigin = changeCanvasBbox(deltaBbox);
-		}		
+			setCanvasBbox(newBbox);
+			this.canvasOrigin = {x: -newBbox.x, y: -newBbox.y}
+		}
 				
 		this.coordinateMap = new WarpingCoordinateMap(
 			this.width, this.height, this.correctBox(fromBox)
@@ -383,4 +383,4 @@ class TrapeziumWarper {
 	}
 }
 
-export { TrapeziumWarper };
+export { TrapeziumWarper as default };

@@ -6,7 +6,14 @@ function updateRoutingPointLabel(routingPoint) {
 	routingPoint.label.textContent = `routing point #${routingPoint.index + 1} (${routingPoint.typeString})`;
 }
 
+const WarpModes = {
+	GRID: 0,
+	TRAPEZIUM : 1
+}
+
 class Handler {
+	warpMode = WarpModes.GRID;
+	
 	constructor(map) {
 		this.map = map;
 		this.drawer = map.drawer;
@@ -47,6 +54,52 @@ class Handler {
 		for (let rp of this.shownRoutingPoints) {
 			rp.el.style.opacity = 0;
 			rp.label.style.visibility = "hidden";
+		}
+	}
+	
+	async selectAffectedRectangle(x, y) {
+		this.affectedRectangle = await Rectangle.selectArea(
+			this.drawer.containerElement,
+			x, y,
+			{fill: "none", stroke: "black", "stroke-width": 2, "stroke-dasharray": 4},
+			{coordTransformMatrix: this.map.pz.matrix}
+		);
+	}
+	
+	async selectMovableRectangleAndBegin(x, y) {
+		let bounds;
+		if (this.warpMode) {
+			bounds = this.affectedRectangle.asBounds();
+		} else {
+			bounds = {}
+		}
+		
+		this.movableRectangle = await Rectangle.selectArea(
+			this.drawer.containerElement,
+			x, y,
+			{fill: "none", stroke: "black", "stroke-width": 2},
+			{...bounds, coordTransformMatrix: this.map.pz.matrix}
+		);
+		
+		if (this.movableRectangle) {
+			this.movableRectangle.resetFlip();
+			this.movableRectangle.flippable = false;
+			
+			this.movableRectangle.allowResizeAndDrag(
+				(() => this.map.onDrag(this.movableRectangle.bbox)).bind(this),
+				"#resizer"
+			);
+			
+			if (this.warpMode) {
+				this.map.initTrapeziumWarp(
+					this.affectedRectangle.bbox,
+					this.movableRectangle.bbox
+				)
+			} else {
+				await this.map.initGridWarp(
+					this.movableRectangle.bbox
+				)
+			}
 		}
 	}
 	
@@ -99,50 +152,45 @@ class Handler {
 					}
 				}
 				break;
+				
+				
 			case "pointerdown":
 				event.preventDefault();
-				 if (data.type == "stop") {
+				
+				if (data.type == "stop") {
 					const stop = this.drawer.getStopFromEl(target);
+					let warping = false;
 					
-					if (this.affectedRectangle && this.affectedRectangle.contains(x, y)) {
-						this.map.initWarp(
-							this.affectedRectangle.bbox,
+					if (this.warpMode == WarpModes.TRAPEZIUM) {
+						if (this.affectedRectangle && this.affectedRectangle.contains(x, y)) {
+							this.map.initTrapeziumWarp(
+								this.affectedRectangle.bbox,
+								{x: stop.x, y: stop.y, width: 0, height: 0}
+							)
+							warping = true;
+							
+							
+						} else {
+							this.removeAffectedRectangle();
+							// bigger rectangle
+						}
+					} else {
+						await this.map.initGridWarp(
 							{x: stop.x, y: stop.y, width: 0, height: 0}
-						)
-						
+						);
+						warping = true;
+					}
+					
+					if (warping) {
 						await dragging(
 							((x, y) => this.map.onDrag({x, y, width: 0, height: 0})).bind(this),
 							this.map.screenToMapCoords.bind(this.map)
 						)
-					} else {
-						this.removeAffectedRectangle();
-						// make bigger rectangle and do stuff with it
 					}
 				
-				} else if (this.affectedRectangle && this.affectedRectangle.contains(x, y)) { // other than a stop (above), nothing else can be dragged in an affectedRectangle
-							
+				} else if (this.affectedRectangle && this.affectedRectangle.contains(x, y)) {
 					this.removeMovableRectangle();
-					
-					this.movableRectangle = await Rectangle.selectArea(
-						this.drawer.containerElement,
-						x, y,
-						{fill: "none", stroke: "black", "stroke-width": 2},
-						{...this.affectedRectangle.asBounds(), coordTransformMatrix: this.map.pz.matrix}
-					);
-					if (this.movableRectangle) {
-						this.movableRectangle.resetFlip();
-						this.movableRectangle.flippable = false;
-						
-						this.movableRectangle.allowResizeAndDrag(
-							(() => this.map.onDrag(this.movableRectangle.bbox)).bind(this),
-							"#resizer"
-						);
-						
-						this.map.initWarp(
-							this.affectedRectangle.bbox,
-							this.movableRectangle.bbox
-						);
-					}
+					this.selectMovableRectangleAndBegin(x, y);
 		
 				} else if (data.type == "line") {
 					
@@ -186,16 +234,15 @@ class Handler {
 					this.waitOneLoopBeforeHidingRoutingPoint = true; 
 					
 					this.rerouting = false;
+
 				} else {
-					this.removeAffectedRectangle();
 					this.removeMovableRectangle();
-					
-					this.affectedRectangle = await Rectangle.selectArea(
-						this.drawer.containerElement,
-						x, y,
-						{fill: "none", stroke: "black", "stroke-width": 2, "stroke-dasharray": 4},
-						{coordTransformMatrix: this.map.pz.matrix}
-					);
+					this.removeAffectedRectangle();
+					if (this.warpMode) {
+						this.selectAffectedRectangle(x, y);
+					} else {
+						this.selectMovableRectangleAndBegin(x, y);		
+					}
 				}
 				
 				break;

@@ -120,17 +120,6 @@ std::vector<Point> get_many_routing_points(std::vector<Point> fixed0, std::vecto
 	return result;
 }
 
-
-std::vector<std::vector<Point>> get_blank_vectors(std::vector<Point>::size_type size, std::vector<Point>::size_type n) {
-	std::vector<std::vector<Point>> result {};
-	result.reserve(n);
-	for (int i { 0 };i < n;++i) {
-		std::vector<Point> vec {};
-		vec.reserve(size);
-		result.push_back(vec);
-	}
-	return result;
-}
 */
 
 

@@ -1,10 +1,10 @@
 import { addSVGElement, randomColour, editSVGElement, getSVGCoords, transformCoords, bboxContains } from "./svg_utils/index.js";
-import Rectangle from "./rectangle/index.js";
-import { TrapeziumWarper } from "./trapezium_warp.js";
+import TrapeziumWarper from "./trapezium_warp.js";
 import { TransitMapBackground, TransitMapDrawer, pointTypes } from "./transit_map_draw.js";
 import TransitMapSpec from "./transit_map_spec.js";
 import Handler from "./transit_map_default_ui.js";
 import { PanZoomListener } from "./panzoom_listener.js";
+import GridWarper from "./grid_warp.js";
 
 
 /*
@@ -76,18 +76,22 @@ class TransitMap {
 	
 	// GETTING SELECTED DATA FOR WARPING
 	
-	#collectPointsInBbox(bbox) {
-		this.affectedPoints = [];
-
+	* allWarpingPoints() {
 		for (let stop of this.stops) {
-			if (bboxContains(bbox, stop.x, stop.y)) {
-				// NEEDS to put them here as we need the ORIGINAL x and y
-				this.affectedPoints.push({origX: stop.x, origY: stop.y, point: stop});
+			yield stop;
+		}
+		for (let point of this.drawer.allRoutingPoints()) {
+			if (point.type == pointTypes.WARPING) {
+				yield point;
 			}
 		}
+	}
+	
+	#collectPointsInBbox(bbox) {
+		this.affectedPoints = [];
 		
-		for (let point of this.drawer.allRoutingPoints()) {
-			if (point.type == pointTypes.WARPING && bboxContains(bbox, point.x, point.y)) {
+		for (let point of this.allWarpingPoints()) {
+			if (bboxContains(bbox, point.x, point.y)) {
 				this.affectedPoints.push({origX: point.x, origY: point.y, point});
 			}
 		}
@@ -96,29 +100,50 @@ class TransitMap {
 	
 	// WARPING - happens in NON-PANZOOMED SPACE
 	
-	async initWarp(affectedBbox, movableBbox) {
+	initTrapeziumWarp(affectedBbox, movableBbox) {
+		this.warpMode = "trapezium";
 		this.#collectPointsInBbox(affectedBbox);
 
 		this.warper = new TrapeziumWarper(
 			affectedBbox,
 			movableBbox,
 			this.background.ctx,
-			this.background.changeBbox.bind(this.background),
+			this.background.setBbox.bind(this.background),
 			this.background.origin
 		)
 	}
 	
-	onDrag(movableBbox) {
-		this.warper.setDestBox(movableBbox);
-		this.warper.warpOnCanvas();
-		
-		for (let {origX, origY, point} of this.affectedPoints) {
-			const {newX, newY} = this.warper.warpPoint({x: origX, y: origY});
-			point.x = Math.round(newX);
-			point.y = Math.round(newY);
+	async initGridWarp(movableBbox) {
+		this.warpMode = "grid";
+		this.warper = new GridWarper(
+			movableBbox,
+			Array.from(this.allWarpingPoints()),
+			this.background.ctx,
+			this.background.setBbox.bind(this.background),
+			this.background.origin
+		)
+		await this.warper.init();
+	}
+	
+	onDrag(movableBbox, growUpX, growUpY) {
+		switch (this.warpMode) {
+			case "trapezium":
+				this.warper.setDestBox(movableBbox);
+				this.warper.warpOnCanvas();
+				
+				for (let {origX, origY, point} of this.affectedPoints) {
+					const {newX, newY} = this.warper.warpPoint({x: origX, y: origY});
+					point.x = Math.round(newX);
+					point.y = Math.round(newY);
+				}
+				
+				this.drawer.draw(this.affectedPoints.map((s) => s.point));
+				break;
+			case "grid":
+				this.warper.warp(movableBbox, growUpX, growUpY);
+				this.drawer.draw();
+				break;
 		}
-		
-		this.drawer.draw(this.affectedPoints.map((s) => s.point));
 	}
 }
 
