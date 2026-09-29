@@ -132,7 +132,7 @@ class GridWarper {
 		}
 		
 		std::array<double, 3> x_scales {
-			(n.x1 - n.y0) / (this->d.x1 - this->d.x0),
+			(n.x1 - n.x0) / (this->d.x1 - this->d.x0),
 			(n.x2 - n.x1) / (this->d.x2 - this->d.x1),
 			(n.x3 - n.x2) / (this->d.x3 - this->d.x2)
 		};
