@@ -59,24 +59,16 @@ class GridWarper {
 		this.images = []; // 9 images
 		
 		for (let {ix, iy, x, y, width, height} of this.imageDimensions()) {
-			this.images[ix*3 + iy] = await createImageBitmap(
-				this.ctx.canvas,
-				x, y, width, height
-			)
+			if (width != 0 && height != 0) {
+				this.images[ix*3 + iy] = await createImageBitmap(
+					this.ctx.canvas,
+					x, y, width, height
+				);
+			}
 		}
 	}
 	
-	warp(bbox, growUpX, growUpY) {
-		
-		const success = this.cwarper.warp(
-			bbox.x, bbox.y, bbox.width, bbox.height,
-			growUpX, growUpY
-		)
-		
-		if (!success) {
-			return;
-		}
-		
+	realiseWarp(bbox, growUpX, growUpY) {
 		const iterator = Iterator.zip([this.affectedPoints, this.affectedPointsVector], {mode: "strict"});
 		for (let [jsPoint, cPoint] of iterator) {
 			jsPoint.x = cPoint.x
@@ -92,11 +84,27 @@ class GridWarper {
 		this.canvasOrigin = {x: -grid.x0, y: -grid.y0};
 		
 		for (let {ix, iy, x, y, width, height} of this.imageDimensions()) {
-			this.ctx.drawImage(
-				this.images[ix*3 + iy],
-				x, y, width, height
-			)
+			const image = this.images[ix*3 + iy];
+			if (image) {
+				this.ctx.drawImage(
+					this.images[ix*3 + iy],
+					x, y, width, height
+				)
+			}
 		}
+	}
+	
+	warp(bbox, growUpX, growUpY) {
+		
+		const success = this.cwarper.warp(
+			bbox.x, bbox.y, bbox.width, bbox.height,
+			growUpX, growUpY
+		)
+
+		if (success) {
+			this.realiseWarp(bbox, growUpX, growUpY);
+		}
+		return true;
 	}
 }
 

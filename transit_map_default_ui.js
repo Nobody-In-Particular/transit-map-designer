@@ -86,7 +86,7 @@ class Handler {
 			this.movableRectangle.flippable = false;
 			
 			this.movableRectangle.allowResizeAndDrag(
-				(() => this.map.onDrag(this.movableRectangle.bbox)).bind(this),
+				(() => this.map.getDragOperation(this.movableRectangle.bbox)).bind(this),
 				"#resizer"
 			);
 			
@@ -183,7 +183,7 @@ class Handler {
 					
 					if (warping) {
 						await dragging(
-							((x, y) => this.map.onDrag({x, y, width: 0, height: 0})).bind(this),
+							((x, y) => this.map.getDragOperation({x, y, width: 0, height: 0})).bind(this),
 							this.map.screenToMapCoords.bind(this.map)
 						)
 					}
@@ -203,7 +203,7 @@ class Handler {
 								data.lineSectionId,
 								data.segmentNumber,
 								0, 0,
-								pointTypes.WARPING								
+								pointTypes.WARPING			
 							)
 							updateRoutingPointLabel(routingPoint);
 							const updateAsDrag = this.initDragRoutingPoint(routingPoint);

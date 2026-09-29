@@ -125,9 +125,10 @@ class TransitMap {
 		await this.warper.init();
 	}
 	
-	onDrag(movableBbox, growUpX, growUpY) {
+	getDragOperation(movableBbox, growUpX, growUpY) {
 		switch (this.warpMode) {
 			case "trapezium":
+			
 				this.warper.setDestBox(movableBbox);
 				this.warper.warpOnCanvas();
 				
@@ -138,11 +139,15 @@ class TransitMap {
 				}
 				
 				this.drawer.draw(this.affectedPoints.map((s) => s.point));
-				break;
+				
+				return true;
+				
 			case "grid":
-				this.warper.warp(movableBbox, growUpX, growUpY);
-				this.drawer.draw();
-				break;
+				const success = this.warper.warp(movableBbox, growUpX, growUpY);
+				if (success) {
+					this.drawer.draw();
+				}
+				return success;
 		}
 	}
 }
