@@ -1,6 +1,8 @@
 #include <vector>
 #include <ranges>
 #include <array>
+#include <iostream>
+#include <cmath>
 
 #include <emscripten/bind.h>
 
@@ -31,8 +33,10 @@ class GridWarper {
 	private:
 	
 	std::vector<Point>& _affected_points;
+	std::vector<Point> _original_points;
 	std::vector<Segment> _segments;
 	GridDimensions d;
+	GridDimensions n;
 	
 	public:
 	GridWarper(
@@ -44,7 +48,10 @@ class GridWarper {
 		double ox, double oy,
 		double ow, double oh
 	)
-		: _affected_points { affected_points },
+		:
+		_affected_points { affected_points },
+		_original_points { affected_points },
+		
 		d {
 			ox, oy,
 			init_x, init_y,
@@ -91,6 +98,8 @@ class GridWarper {
 			this->d.y3 = this->d.y2 + 1;
 		}
 		
+		this->n = d;
+		
 	}
 	
 	bool warp(
@@ -100,10 +109,10 @@ class GridWarper {
 		
 		// can't go past the corner it shrinks to
 		if (
-			x <= this->d.x0 && grow_up_x ||
-			x + w >= this->d.x3 && !grow_up_x ||
-			y <= this->d.y0 && grow_up_y ||
-			y + h >= this->d.y3 && !grow_up_y
+			x <= this->n.x0 && grow_up_x ||
+			x + w >= this->n.x3 && !grow_up_x ||
+			y <= this->n.y0 && grow_up_y ||
+			y + h >= this->n.y3 && !grow_up_y
 		) {
 			return false;
 		}
@@ -116,18 +125,18 @@ class GridWarper {
 		n.y2 = y + h;
 		
 		if (grow_up_x) {
-			n.x3 = n.x2 + (this->d.x3 - this->d.x2);
-			n.x0 = this->d.x0;
+			n.x3 = n.x2 + (this->n.x3 - this->n.x2);
+			n.x0 = this->n.x0;
 		} else {
-			n.x0 = n.x1 - (this->d.x1 - this->d.x0);
-			n.x3 = this->d.x3;
+			n.x0 = n.x1 - (this->n.x1 - this->n.x0);
+			n.x3 = this->n.x3;
 		}
 		
 		if (grow_up_y) {
-			n.y3 = n.y2 + (this->d.y3 - this->d.y2);
-			n.y0 = this->d.y0;
+			n.y3 = n.y2 + (this->n.y3 - this->n.y2);
+			n.y0 = this->n.y0;
 		} else {
-			n.y0 = n.y1 - (this->d.y1 - this->d.y0);
+			n.y0 = n.y1 - (this->n.y1 - this->n.y0);
 			n.y3 = this->d.y3;
 		}
 		
@@ -137,48 +146,59 @@ class GridWarper {
 			(n.x3 - n.x2) / (this->d.x3 - this->d.x2)
 		};
 		
+		if (this->d.x2 == this->d.x1) {
+			x_scales[1] = 0;
+		}
+				
 		std::array<double, 3> y_scales {
 			(n.y1 - n.y0) / (this->d.y1 - this->d.y0),
 			(n.y2 - n.y1) / (this->d.y2 - this->d.y1),
 			(n.y3 - n.y2) / (this->d.y3 - this->d.y2)
 		};
 		
+		if (this->d.y2 == this->d.y1) {
+			y_scales[1] = 0;
+		}
+		
 		for (int i { 0 };i < this->_affected_points.size();++i) {
+			
+			Point& original_point { this->_original_points[i] };
 			Point& point { this->_affected_points[i] };
 			const Segment segment { this->_segments[i] };
 			
 			switch (segment.x) {
 				case 0:
-					point.x = (point.x - this->d.x0) * x_scales[0] + n.x0;
+					point.x = (original_point.x - this->d.x0) * x_scales[0] + n.x0;
 					break;
 				case 1:
-					point.x = (point.x - this->d.x1) * x_scales[1] + n.x1;
+					point.x = (original_point.x - this->d.x1) * x_scales[1] + n.x1;
 					break;
 				case 2:
-					point.x = (point.x - this->d.x2) * x_scales[2] + n.x2;
+					point.x = (original_point.x - this->d.x2) * x_scales[2] + n.x2;
 					break;
 			}
 			
 			switch (segment.y) {
 				case 0:
-					point.y = (point.y - this->d.y0) * y_scales[0] + n.y0;
+					point.y = (original_point.y - this->d.y0) * y_scales[0] + n.y0;
 					break;
 				case 1:
-					point.y = (point.y - this->d.y1) * y_scales[1] + n.y1;
+					point.y = (original_point.y - this->d.y1) * y_scales[1] + n.y1;
 					break;
 				case 2:
-					point.y = (point.y - this->d.y2) * y_scales[2] + n.y2;
+					point.y = (original_point.y - this->d.y2) * y_scales[2] + n.y2;
 					break;
 			}
 		}
 		
-		this->d = n;
+		
+		this->n = n;
 		
 		return true;
 	}
 	
 	GridDimensions get_dimensions() {
-		return this->d;
+		return this->n;
 	}
 };
 

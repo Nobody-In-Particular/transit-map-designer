@@ -57,6 +57,12 @@ class Handler {
 		}
 	}
 	
+	getGrowDirections(x, y, startX, startY) {
+		const growUpX = x - startX > 0;
+		const growUpY = y - startY > 0;
+		return [growUpX, growUpY]
+	}
+	
 	async selectAffectedRectangle(x, y) {
 		this.affectedRectangle = await Rectangle.selectArea(
 			this.drawer.containerElement,
@@ -84,10 +90,12 @@ class Handler {
 		if (this.movableRectangle) {
 			this.movableRectangle.resetFlip();
 			this.movableRectangle.flippable = false;
-			
+						
 			this.movableRectangle.allowResizeAndDrag(
-				(() => this.map.getDragOperation(this.movableRectangle.bbox)).bind(this),
-				"#resizer"
+				((growDirections) => this.map.onDrag(this.movableRectangle.bbox, ...growDirections)).bind(this),
+				"#resizer",
+				true,
+				((x, y, startX, startY) => this.getGrowDirections(x, y, startX, startY)).bind(this)
 			);
 			
 			if (this.warpMode) {
@@ -163,6 +171,7 @@ class Handler {
 					
 					if (this.warpMode == WarpModes.TRAPEZIUM) {
 						if (this.affectedRectangle && this.affectedRectangle.contains(x, y)) {
+							this.removeMovableRectangle();
 							this.map.initTrapeziumWarp(
 								this.affectedRectangle.bbox,
 								{x: stop.x, y: stop.y, width: 0, height: 0}
@@ -174,7 +183,8 @@ class Handler {
 							this.removeAffectedRectangle();
 							// bigger rectangle
 						}
-					} else {
+					} else { // warp mode is GRID
+						this.removeMovableRectangle();
 						await this.map.initGridWarp(
 							{x: stop.x, y: stop.y, width: 0, height: 0}
 						);
@@ -182,9 +192,17 @@ class Handler {
 					}
 					
 					if (warping) {
+						const startX = x;
+						const startY = y;
+						
 						await dragging(
-							((x, y) => this.map.getDragOperation({x, y, width: 0, height: 0})).bind(this),
-							this.map.screenToMapCoords.bind(this.map)
+							(
+								(x, y, growDirections) => this.map.onDrag({x, y, width: 0, height: 0}, ...growDirections)
+							).bind(this),
+							
+							this.map.screenToMapCoords.bind(this.map),
+							
+							((x, y) => this.getGrowDirections(x, y, startX, startY)).bind(this)
 						)
 					}
 				

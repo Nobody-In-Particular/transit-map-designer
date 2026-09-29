@@ -125,7 +125,7 @@ class TransitMap {
 		await this.warper.init();
 	}
 	
-	getDragOperation(movableBbox, growUpX, growUpY) {
+	onDrag(movableBbox, growUpX, growUpY) {
 		switch (this.warpMode) {
 			case "trapezium":
 			
