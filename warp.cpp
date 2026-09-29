@@ -76,12 +76,37 @@ class GridWarper {
 			
 			this->_segments.emplace_back(x_seg, y_seg);
 		}
+		
+		// out of bounds and zero width corrections
+		if (this->d.x1 <= this->d.x0) {
+			this->d.x0 = this->d.x1 - 1;
+		}
+		if (this->d.x2 >= this->d.x3) {
+			this->d.x3 = this->d.x2 + 1;
+		}
+		if (this->d.y1 <= this->d.y0) {
+			this->d.y0 = this->d.y1 - 1;
+		}
+		if (this->d.y2 >= this->d.y3) {
+			this->d.y3 = this->d.y2 + 1;
+		}
+		
 	}
 	
-	void warp(
+	bool warp(
 		double x, double y, double w, double h,
 		bool grow_up_x, bool grow_up_y // whether the growing direction is "up" (right/down) or not for x and y
 	) {
+		
+		// can't go past the corner it shrinks to
+		if (
+			x <= this->d.x0 && grow_up_x ||
+			x + w >= this->d.x3 && !grow_up_x ||
+			y <= this->d.y0 && grow_up_y ||
+			y + h >= this->d.y3 && !grow_up_y
+		) {
+			return false;
+		}
 			
 		GridDimensions n {};
 
@@ -148,6 +173,8 @@ class GridWarper {
 		}
 		
 		this->d = n;
+		
+		return true;
 	}
 	
 	GridDimensions get_dimensions() {

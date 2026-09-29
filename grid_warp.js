@@ -67,10 +67,15 @@ class GridWarper {
 	}
 	
 	warp(bbox, growUpX, growUpY) {
-		this.cwarper.warp(
+		
+		const success = this.cwarper.warp(
 			bbox.x, bbox.y, bbox.width, bbox.height,
 			growUpX, growUpY
 		)
+		
+		if (!success) {
+			return;
+		}
 		
 		const iterator = Iterator.zip([this.affectedPoints, this.affectedPointsVector], {mode: "strict"});
 		for (let [jsPoint, cPoint] of iterator) {
@@ -83,7 +88,7 @@ class GridWarper {
 			x: grid.x0, y: grid.y0,
 			width: grid.x3 - grid.x0,
 			height: grid.y3 - grid.y0
-		});
+		}, {redraw: false});
 		this.canvasOrigin = {x: -grid.x0, y: -grid.y0};
 		
 		for (let {ix, iy, x, y, width, height} of this.imageDimensions()) {
